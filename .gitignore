@@ -1,0 +1,9 @@
+/build
+/dist
+*.log
+*.spec
+/.vscode
+/task_files
+/log
+/report
+/test.py

@@ -1,0 +1,27 @@
+[[source]]
+name = "pypi"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+verify_ssl = true
+
+[scripts]
+# build = "pyinstaller -y -n werpa --add-data \"winappdriver;winappdriver\" main.py"
+build = "pyinstaller -y -n taibaorpa --add-data 'driver\\chrome\\chromedriver.exe;driver\\chrome' --add-data 'res;res' main.py"
+
+[dev-packages]
+pylint = "*"
+autopep8 = "*"
+pyinstaller = "*"
+
+[packages]
+selenium = "*"
+requests = "*"
+pynput = "*"
+pywinauto = "*"
+pillow = "*"
+openpyxl = "*"
+keyboard = "*"
+psutil = "*"
+cpca = "*"
+
+[requires]
+python_version = "3.8"
