@@ -12,21 +12,27 @@ class LoadingDlg:
     """加载对话框，如点击车型查询后的白屏"""
     def __init__(self, driver):
         self.driver = driver
+        self.driverwait = webdriverhelper.WebDriverHelper(driver, 10)
         self.root = None
 
     def exists(self, timeout=2.0):
         if self.root:
             return True
         try:
-            self.root = WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located(
-                    (By.CLASS_NAME, 'el-loading-mask is-fullscreen')))
+            # self.root = WebDriverWait(self.driver, timeout).until(
+            #     EC.presence_of_element_located(
+            #         (By.CLASS_NAME, 'el-loading-mask is-fullscreen')))
+
+            # 这样才行，上面的不行，气死了....
+            self.root = self.driverwait.until_find_element(By.XPATH, '//*[@class="el-loading-mask is-fullscreen"]')
         except TimeoutException:
             return False
         return True
 
     def wait_for_disappear(self, timeout=10.0):
         if self.exists():
+            print('warning 35')
+            # 车型查询界面本来就是一个大提醒框，不能用这个
             WebDriverWait(self.driver,timeout).until(EC.staleness_of(self.root))
 
 
@@ -34,15 +40,19 @@ class WarningDlg:
     """提醒对话框"""
     def __init__(self, driver):
         self.driver = driver
+        self.driverwait = webdriverhelper.WebDriverHelper(driver, 10)
         self.root = None
 
     def exists(self, timeout=2.0):
         if self.root:
             return True
         try:
-            self.root = WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located(
-                    (By.CLASS_NAME, 'el-message el-message--warning is-closable')))
+            # self.root = WebDriverWait(self.driver, timeout).until(
+            #     EC.presence_of_element_located(
+            #         (By.CLASS_NAME, 'el-message el-message--warning is-closable')))
+
+            # 这样才行，上面的不行，气死了....
+            self.root = self.driverwait.until_find_element(By.XPATH,'//*[@class="el-message el-message--warning is-closable"]')
         except TimeoutException:
             return False
         return True
@@ -51,9 +61,13 @@ class WarningDlg:
         return self.root.find_element_by_class_name('el-message__content').text
 
     def close(self):
-        elem = self.root.find_element_by_class_name('el-message__closeBtn el-icon-close')
+        # elem = self.root.find_element_by_class_name('el-message__closeBtn el-icon-close')
+
+        # 上面的这种查找方法竟然也不行，get_content那里却可以，你说气不气？？？
+        elems = self.root.find_elements_by_tag_name('i')
+        elem = elems[1]
         self.driver.execute_script("arguments[0].click()", elem)
-        self.wait_for_disappear()
+        # self.wait_for_disappear()
 
     def wait_for_disappear(self, timeout=10.0):
         if self.exists():
@@ -68,11 +82,13 @@ class ErrorMsgDlg:
         self.driverwait = webdriverhelper.WebDriverHelper(driver, 10)
         self.root = None
 
-    def exists(self, timeout=5.0):
+    def exists(self, timeout=3.0):
         if self.root:
             return True
         try:
             # self.root = WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located((By.CLASS_NAME, 'el-message el-message--error is-closable')))
+
+            # 这样才行，上面的不行，气死了....
             self.root = self.driverwait.until_find_element(By.XPATH,'//*[@class="el-message el-message--error is-closable"]')
             print('zhaodaole747474')
         except TimeoutException:
@@ -84,9 +100,14 @@ class ErrorMsgDlg:
         return self.root.find_element_by_class_name('el-message__content').text
 
     def close(self):
-        elem = self.root.find_element_by_class_name('el-message__closeBtn el-icon-close')
+        # elem = self.root.find_elements_by__name('el-message__closeBtn el-icon-close')
+
+        # 上面的这种查找方法竟然也不行，get_content那里却可以，你说气不气？？？
+        elems = self.root.find_elements_by_tag_name('i')
+        elem = elems[1]
+        # elem.click()
         self.driver.execute_script("arguments[0].click()", elem)
-        self.wait_for_disappear()
+        # self.wait_for_disappear()
 
     def wait_for_disappear(self, timeout=10.0):
         if self.exists():
@@ -98,14 +119,18 @@ class SuccessMsgDlg:
     """成功提示对话框"""
     def __init__(self, driver):
         self.driver = driver
+        self.driverwait = webdriverhelper.WebDriverHelper(driver, 10)
         self.root = None
 
     def exists(self, timeout=2.0):
         if self.root:
             return True
         try:
-            self.root = WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located((By.CLASS_NAME, 'el-message el-message--success is-closable')))
+            # self.root = WebDriverWait(self.driver, timeout).until(
+            #     EC.presence_of_element_located((By.CLASS_NAME, 'el-message el-message--success is-closable')))
+            # 这样才行，上面的不行，气死了....
+            self.root = self.driverwait.until_find_element(By.XPATH,
+                                                           '//*[@class="el-message el-message--success is-closable"]')
         except TimeoutException:
             print(106,'meizhaodao ')
             return False
@@ -115,9 +140,13 @@ class SuccessMsgDlg:
         return self.root.find_element_by_class_name('el-message__content').text
 
     def close(self):
-        elem = self.root.find_element_by_class_name('el-message__closeBtn el-icon-close')
+        # elem = self.root.find_element_by_class_name('el-message__closeBtn el-icon-close')
+
+        # 上面的这种查找方法竟然也不行，get_content那里却可以，你说气不气？？？
+        elems = self.root.find_elements_by_tag_name('i')
+        elem = elems[1]
         self.driver.execute_script("arguments[0].click()", elem)
-        self.wait_for_disappear()
+        # self.wait_for_disappear()
 
     def wait_for_disappear(self, timeout=10.0):
         if self.exists():

@@ -121,8 +121,8 @@ class DajiabaoWeb:
 
     # 给浏览器设置参数，并打开网页
     def open(self, url=None, download_dir=None):
-        # logger.info('Kill existing chrome process.')
-        # prun(['taskkill', '/f', '/t', '/im', 'chrome.exe'])
+        logger.info('Kill existing chrome process.')
+        prun(['taskkill', '/f', '/t', '/im', 'chrome.exe'])
 
         options = webdriver.ChromeOptions()
         options.add_argument('--start-maximized')
@@ -301,8 +301,9 @@ class DajiabaoWeb:
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_MSG_LOAD)
 
     def idcard_ocr(self, data):
-        files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\不是身份证.png'},
-                {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},]
+        # files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\不是身份证.png'},
+        #         {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},]
+        files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'}, ]
         # 点击识别按钮  input和img都不能点击，要点击外层的div
         # prv_chrome_pid_list = self.get_pid("chrome.exe")
         # print(prv_chrome_pid_list)
@@ -318,7 +319,7 @@ class DajiabaoWeb:
         for f in files:
             file_path = f['path']
             self.driver.find_element_by_xpath('//div[./input[@id="insuranceCarOwncarOwnImgMessageOCR"]]').click()
-            time.sleep(3)
+            time.sleep(2)
             # 鼠标光标默认在文件路径输入框，直接输入，回车就好了
             keyboard.write(file_path.strip())
             keyboard.send('enter')
@@ -333,29 +334,14 @@ class DajiabaoWeb:
                     print([333, ownr_addr, card_id])
                     return [ownr_addr, card_id]
                 else:
-                    # 测试+++++++++++++++++++++++++
-
-                    # elem = self.driver.find_element_by_xpath("//div[@class='el-message el-message--error is-closable']")
-                    # if elem:
-                    #     print(342, elem.find_element_by_xpath('./i/p').text)
-                    # 测试+++++++++++++++++++++++++++++++
                     print(342)
-                    time.sleep(3)
-
-                    # TODO++++++++++++++++++++++++++这样就可以了，，气死人++++++++++++++++
-                    elem = self.driverwait.until_find_element(By.XPATH,'//*[@class="el-message el-message--error is-closable"]')
-                    print(elem.find_element_by_xpath('./p').text)
-
-                    print(335)
-                    print(self.driver.current_window_handle)
-                    print(self.driver.window_handles)
-                    self.driver.switch_to.default_content
-
+                    # time.sleep(3)
                     dlg = dialog.ErrorMsgDlg(self.driver)
-                    if dlg.exists(timeout=0.5) and '识别失败' in dlg.get_content():
+                    if dlg.exists() and '识别失败' in dlg.get_content():
+                        print(353, dlg.get_content())
+                        logger.info(f'{dlg.get_content()}')
                         dlg.close()
-                        dlg.wait_for_disappear()
-                        print("11身份证识别失败")
+                        # dlg.wait_for_disappear()
                         break
         else:
             print("身份证识别失败")
@@ -456,48 +442,56 @@ class DajiabaoWeb:
         phone_elem.send_keys(phone)
         comfirm_elem = self.driver.find_element_by_xpath('//*[@id="insuranceCarOwnInfoClientConfirm"]')
         self.driver.execute_script("arguments[0].click()", comfirm_elem)
+
         dlg_success = dialog.SuccessMsgDlg(self.driver)
         dlg_fail = dialog.ErrorMsgDlg(self.driver)
-        print(444)
-
         if dlg_success.exists():
-            print('客户确认成功')
             logger.info(f'{dlg_success.get_content()}')
             dlg_success.close()
         elif dlg_fail.exists(timeout=0.5):
-            print('客户确认失败')
             err_msg = dlg_fail.get_content()
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CUSTOMER_CONFIRM.format(err_msg))
 
     def car_info_ocr(self, data):
         """识别行驶证
         """
+        # 滚动页面至车辆信息位置可见且合适
         input_elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarOwnInfoCity"]')
         self.driver.execute_script("arguments[0].scrollIntoView();", input_elem)
-        files = [
-                {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},
-                 {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},]
+        # files = [
+        #         {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},
+        #          {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},]
+        files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'}, ]
         for f in files:
             print(463,f)
             file_path = f['path']
             # 点击识别按钮
+            t = time.time()
+
+            # 下面三项，如果用click点击就会等待超长25秒左右，js点击很快，但是  ocr识别按钮不能js点击
             elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]')
+            print(470, time.time() - t)
+            # self.driver.execute_script("arguments[0].click()", elem)
             elem.click()
-            print(468)
-            self.driver.find_element_by_xpath('//span[text()="行驶证"]/..').click()
-            print(470)
-            self.driver.find_element_by_xpath('//input[@id="carOcrInput"]/../button[./span[text()="确认"]]').click()
-            print(472)
+            print(472, time.time()-t) # TODO 这几个地方click需要超长时间，为什么呢？？？？？？？
+
+            elem = self.driver.find_element_by_xpath('//span[text()="行驶证"]/..')
+            self.driver.execute_script("arguments[0].click()", elem)
+            # elem.click()
+
+            elem = self.driver.find_element_by_xpath('//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
+            self.driver.execute_script("arguments[0].click()", elem)
+            # elem.click()
+
             time.sleep(2)
             # 鼠标光标默认在文件路径输入框，直接输入，回车就好了
             keyboard.write(file_path.strip())
             keyboard.send('enter')
-            print(477)
             # 等待查询结果出来
             vin_input = self.driver.find_element_by_xpath('//div[@id="insuranceCarInfoFrameNumber"]/div/input')
             licence_input = self.driver.find_element_by_xpath('//div[@id="insuranceCarInfoLicensePlateNumber"]/div/input')
             engine_input = self.driver.find_element_by_xpath('//div[@id="insuranceCarInfoNegineNumber"]/div/input')
-            for i in range(10):
+            for i in range(5):
                 print(483,i)
                 time.sleep(0.5)
                 if vin_input.get_attribute('value') and licence_input.get_attribute('value') and engine_input.get_attribute('value'):
@@ -513,11 +507,19 @@ class DajiabaoWeb:
                 else:
                     print(496)
                     dlg = dialog.ErrorMsgDlg(self.driver)
-                    if dlg.exists(timeout=0.5) and '识别失败' in dlg.get_content():
+                    # if dlg.exists(timeout=0.5) and '识别失败' in dlg.get_content():
+                    if dlg.exists():
+                        logger.info(f'{dlg.get_content()}')
                         print(493,dlg.get_content())
-                        # dlg.close()
-                        dlg.wait_for_disappear()
+                        dlg.close()
                         print("11行驶证识别失败")
+                        break
+
+                    dlg = dialog.WarningDlg(self.driver)
+                    if dlg.exists():
+                        logger.info(f'{dlg.get_content()}')
+                        print(511, dlg.get_content())
+                        dlg.close()
                         break
         else:
             print("行驶证识别失败")
@@ -526,31 +528,17 @@ class DajiabaoWeb:
     def search_car_model(self,data):
         """车型查询界面处理
         """
-        # 点击 车型，然后直接点击 查询
+        # 点击 车型
         elem = self.driver.find_element_by_xpath('//button[@id="insuranceCarInfoMotorcycleType"]')
         self.driver.execute_script("arguments[0].click()", elem)
-        print(503,dialog.WarningDlg(self.driver).exists())
-
-        elem = self.driver.find_element_by_xpath('//div[@class="el-message el-message--success is-closable"]')
-        if elem:
-            print(512, elem.find_element_by_xpath('./i/p').text)
-        elem = self.driver.find_element_by_xpath("//div[@class='el-message el-message--error is-closable']")
-        if elem:
-            print(512, elem.find_element_by_xpath('./i/p').text)
-
+        # print(503,dialog.WarningDlg(self.driver).exists())
+        # 直接点击 查询
         search_elem = self.driverwait.until_find_element(By.ID,"motorcycleTypeDialogSearch")
         search_elem.click()
 
         # 网络延迟可能会出现较长时间的白屏加载界面
-        print(508,dialog.LoadingDlg(self.driver).exists())
-        dialog.LoadingDlg(self.driver).wait_for_disappear()
-
-        elem = self.driver.find_element_by_xpath('//div[@class="el-message el-message--success is-closable"]')
-        if elem:
-            print(532, elem.driver.find_element_by_xpath('./i/p').text)
-        elem = self.driver.find_element_by_xpath('el-message el-message--error is-closable')
-        if elem:
-            print(535, elem.driver.find_element_by_xpath('./i/p').text)
+        # print(508,dialog.LoadingDlg(self.driver).exists())
+        time.sleep(3)
 
         # 如果没默认的 车型 查询不到，会报错，我们处理车型再次查询
         dlg = dialog.ErrorMsgDlg(self.driver)
@@ -564,48 +552,85 @@ class DajiabaoWeb:
             model_re = re.search('[0-9A-Za-z]{1,}', model)
             if model_re:
                 model = model_re.group()  # 如：'明锐牌SVW7206FPD'需要变成'SVW7206FPD'，内容才能查询得到
-            input_elem = self.driver.find_element_by_xpath("//label[text()='车型名称: ']/../descendant::input")
+            input_elem = self.driver.find_element_by_xpath("//label[text()='车型名称:']/../descendant::input")
             print(517,model)
             input_elem.send_keys(Keys.CONTROL, "a")
             # elem.clear() # 这个不行会报错
             input_elem.send_keys(model)
             search_elem.click()
         # 网络延迟可能会出现较长时间的白屏加载界面
-        dialog.LoadingDlg(self.driver).wait_for_disappear()
+        # dialog.LoadingDlg(self.driver).wait_for_disappear() # 用这个会出错，本身就是个大提醒窗口，不可能消失的
+        time.sleep(4)
 
-        head_tr = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__fixed-right']]")
-        # head_tr = self.driver.find_element_by_xpath("//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__fixed-right']]")
-        head_th_list = head_tr.find_elements_by_name('th')
+        time_index = ''
+        price_index = ''
+        select_index = ''
+        # head_tr1和head_tr2 网页看上去是一样的，但是head_tr2只能获取到th.text='操作'，head_tr1中可以获取到其他的表头，莫名其妙？？？？
+        head_tr1 = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__header-wrapper']]")
+        head_th_list1 = head_tr1.find_elements_by_tag_name('th')
+        for th in head_th_list1:
+            print(th.text)
+            if '上市年月' in th.text:
+                time_index = head_th_list1.index(th)
+            elif '新车购置价' in th.text:
+                price_index = head_th_list1.index(th)
+        head_tr2 = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__fixed-right']]")
+        head_th_list = head_tr2.find_elements_by_tag_name('th')
         for th in head_th_list:
-            if th.find_element_by_name('div') == '上市年月':
-                time_index = head_th_list.index(th)
-            elif th.find_element_by_name('div') == '新车购置价':
-                price_index = head_th_list.index(th)
-            elif th.find_element_by_name('div') == '操作':
+            if '操作' in th.text:
                 select_index = head_th_list.index(th)
+        if not (time_index and price_index and select_index):
+            print(571, time_index, price_index, select_index)
+            time_index = 8
+            price_index = 9
+            select_index = 16
 
-        tbody_elem = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody")
+        print(566,time_index,price_index,select_index)
+        # tbody_elem = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody")
+        tbody_elem = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__header-wrapper']/../div[@class='el-table__body-wrapper is-scrolling-none']/table/tbody")
         # tbody_elem = self.driver.find_element_by_xpath("//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody")
-        tr_list = tbody_elem.find_elements_by_name('tr')
+        tr_list = tbody_elem.find_elements_by_tag_name('tr')
 
         time_list = []
         price_list = []
         for tr in tr_list:
-            time_list.append(tr[time_index])
-            price_list.append(tr[price_index])
+            time_list.append(tr.find_elements_by_tag_name('td')[time_index].text)
+            price_list.append(tr.find_elements_by_tag_name('td')[price_index].text)
         # 将初等日期 2021-03-25 变成 20210325
         first_regist_date = data['初登日期'].replace('-','')
-        print(first_regist_date)
-        sort_price_list = self.insert_sort(price_list)
+        print(577, first_regist_date)
+        print(577, time_list)
+        print(577, price_list)
+        # 价格排序
+        # 必须是price_list.copy()或者深拷贝，不然price_list本身也会变！！！！！
+        # 列表是可变类型，引用传递后会影响原列表，因为列表内容是不可变类型，浅拷贝就好了，如果列表项是可变就要用深拷贝
+        sort_price_list = self.insert_sort(price_list.copy())
+        print(595,sort_price_list)
         for price in sort_price_list:
+            print(price)
+            print(price_list)
+            print(59,price_list.index(price))
+            print(597,int(time_list[price_list.index(price)]))
+
+            print(598,int(first_regist_date[0:6]))
             if int(time_list[price_list.index(price)]) <= int(first_regist_date[0:6]):
                 fin_chose_index = price_list.index(price)
+                fin_price = price
+                print(583,price,fin_chose_index)
                 break
         else:
             print('实在找不到。。。。。')
-        fin_tr = tr_list[fin_chose_index]
-        select_btn = fin_tr.find_elements_by_name('td')[select_index].find_element_by_name('div').find_element_by_name('button')
+
+        # 操作-选择 一栏只能操作这里面的，这里面不能操作其他t-head项
+        select_btn = self.driver.find_element_by_xpath(f"//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody/tr[{fin_chose_index+1}]/td[{select_index + 1}]/div/button")
         select_btn.click()
+        # 这样不行，这里面唯独不能操作 操作-选择 的内容
+        # #select_btn = self.driver.find_element_by_xpath(f"//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__header-wrapper']/../div[@class='el-table__body-wrapper is-scrolling-none']/table/tbody/tr[{fin_chose_index+1}]/td[{select_index + 1}]/div/button")
+        # #select_btn.click()
+
+        # 等待查询结果出来,新车购置价 会加载
+        locator = (By.ID, "insuranceCarInfoNewCarPurchasePrice")
+        WebDriverWait(self.driver, 2).until(EC.text_to_be_present_in_element_value(locator, fin_price))
         pass
 
     def insert_sort(self, ilist):
