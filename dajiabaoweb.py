@@ -437,23 +437,34 @@ class DajiabaoWeb:
         elem = self.driver.find_element_by_xpath('//label[contains(string(),"车主地址")]')
         elem.click()
 
+        # 选择后，车主通讯地址会变化，重新输入一下
+        elem = self.driver.find_element_by_xpath('//div[@id="insuranceCarOwnInfoComAddress"]/div/input')
+        elem.send_keys(Keys.CONTROL, "a")
+        elem.send_keys(ownr_addr)
+
+
         # 输入手机号、确认客户
         phone_elem = self.driver.find_element_by_xpath('//*[@id="insuranceCarOwnInfoMobile"]/div/input')
         phone_elem.send_keys(phone)
         comfirm_elem = self.driver.find_element_by_xpath('//*[@id="insuranceCarOwnInfoClientConfirm"]')
-        self.driver.execute_script("arguments[0].click()", comfirm_elem)
+        comfirm_elem.click()
+        # self.driver.execute_script("arguments[0].click()", comfirm_elem)
 
         dlg_success = dialog.SuccessMsgDlg(self.driver)
         dlg_fail = dialog.ErrorMsgDlg(self.driver)
+        for i in range(10):
+            if not dlg_success.exists():
+                print(457)
+                time.sleep(0.5)
         if dlg_success.exists():
             logger.info(f'{dlg_success.get_content()}')
             dlg_success.close()
-        elif dlg_fail.exists(timeout=0.5):
+        if dlg_fail.exists(timeout=0.5):
             err_msg = dlg_fail.get_content()
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CUSTOMER_CONFIRM.format(err_msg))
 
     def car_info_ocr(self, data):
-        """识别行驶证
+        """识别行驶证,得到车辆相关各种信息
         """
         # 滚动页面至车辆信息位置可见且合适
         input_elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarOwnInfoCity"]')
@@ -466,22 +477,24 @@ class DajiabaoWeb:
             print(463,f)
             file_path = f['path']
             # 点击识别按钮
-            t = time.time()
+            # 下面三项，会偶尔阻塞超长25秒左右，js点击很快
+            # 点击 车辆识别按钮
+            # elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]')
+            # elem.click()
+            elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]/a/img')
+            self.driver.execute_script("arguments[0].click()", elem)
 
-            # 下面三项，如果用click点击就会等待超长25秒左右，js点击很快，但是  ocr识别按钮不能js点击
-            elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]')
-            print(470, time.time() - t)
-            # self.driver.execute_script("arguments[0].click()", elem)
-            elem.click()
-            print(472, time.time()-t) # TODO 这几个地方click需要超长时间，为什么呢？？？？？？？
-
-            elem = self.driver.find_element_by_xpath('//span[text()="行驶证"]/..')
+            # elem = self.driver.find_element_by_xpath('//span[text()="行驶证"]/..')
+            elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="行驶证"]/..')
+            time.sleep(0.5)
             self.driver.execute_script("arguments[0].click()", elem)
             # elem.click()
 
             elem = self.driver.find_element_by_xpath('//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
-            self.driver.execute_script("arguments[0].click()", elem)
-            # elem.click()
+            # elem = self.driverwait.until_find_element(By.XPATH,'//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
+            time.sleep(0.5)
+            # self.driver.execute_script("arguments[0].click()", elem)
+            elem.click()
 
             time.sleep(2)
             # 鼠标光标默认在文件路径输入框，直接输入，回车就好了
@@ -516,6 +529,7 @@ class DajiabaoWeb:
                         break
 
                     dlg = dialog.WarningDlg(self.driver)
+                    print(530)
                     if dlg.exists():
                         logger.info(f'{dlg.get_content()}')
                         print(511, dlg.get_content())
@@ -529,35 +543,57 @@ class DajiabaoWeb:
         """车型查询界面处理
         """
         # 点击 车型
+        t=time.time()
         elem = self.driver.find_element_by_xpath('//button[@id="insuranceCarInfoMotorcycleType"]')
         self.driver.execute_script("arguments[0].click()", elem)
-        # print(503,dialog.WarningDlg(self.driver).exists())
-        # 直接点击 查询
-        search_elem = self.driverwait.until_find_element(By.ID,"motorcycleTypeDialogSearch")
-        search_elem.click()
-
-        # 网络延迟可能会出现较长时间的白屏加载界面
-        # print(508,dialog.LoadingDlg(self.driver).exists())
-        time.sleep(3)
-
-        # 如果没默认的 车型 查询不到，会报错，我们处理车型再次查询
+        print(536,time.time()-t)
         dlg = dialog.ErrorMsgDlg(self.driver)
         dlg2 = dialog.WarningDlg(self.driver)
-        if dlg.exists() or dlg2.exists():
-            print(508508)
-            # dlg.close()
-            # dlg.wait_for_disappear()
+        for i in range(4):
+            time.sleep(1)
+            if dlg.exists():
+                logger.info(f'search_car_model ErrorMsgDlg:{dlg.get_content()}')
+                dlg.close()
+                break
+            if dlg2.exists():
+                logger.info(f'search_car_model WarningDlg:{dlg2.get_content()}')
+                dlg2.close()
+                break
+        # # 直接点击 查询
+        # search_elem = self.driverwait.until_find_element(By.ID,"motorcycleTypeDialogSearch")
+        # search_elem.click()
+        # # 网络延迟可能会出现较长时间的白屏加载界面
+        # time.sleep(3)
+        # # 如果没默认的 车型 查询不到，会报错，我们处理车型再次查询
+        # dlg = dialog.ErrorMsgDlg(self.driver)
+        # dlg2 = dialog.WarningDlg(self.driver)
+        # if dlg.exists() or dlg2.exists():
+        #     print(508508)
+        #     model = data['厂牌型号']
+        #     model_re = re.search('[0-9A-Za-z]{1,}', model)
+        #     if model_re:
+        #         model = model_re.group()  # 如：'明锐牌SVW7206FPD'需要变成'SVW7206FPD'，内容才能查询得到
+        #     input_elem = self.driver.find_element_by_xpath("//label[text()='车型名称:']/../descendant::input")
+        #     print(517,model)
+        #     input_elem.send_keys(Keys.CONTROL, "a")
+        #     # elem.clear() # 这个不行会报错
+        #     input_elem.send_keys(model)
+        #     search_elem.click()
 
-            model = data['厂牌型号']
-            model_re = re.search('[0-9A-Za-z]{1,}', model)
-            if model_re:
-                model = model_re.group()  # 如：'明锐牌SVW7206FPD'需要变成'SVW7206FPD'，内容才能查询得到
-            input_elem = self.driver.find_element_by_xpath("//label[text()='车型名称:']/../descendant::input")
-            print(517,model)
-            input_elem.send_keys(Keys.CONTROL, "a")
-            # elem.clear() # 这个不行会报错
-            input_elem.send_keys(model)
-            search_elem.click()
+        #
+
+        # 去除车型中的汉字
+        model = data['厂牌型号']
+        model_re = re.search('[0-9A-Za-z]{1,}', model)
+        if model_re:
+            model = model_re.group()  # 如：'明锐牌SVW7206FPD'需要变成'SVW7206FPD'，内容才能查询得到
+        input_elem = self.driverwait.until_find_element(By.XPATH, "//label[text()='车型名称:']/../descendant::input")
+        print(517, model)
+        input_elem.send_keys(Keys.CONTROL, "a")
+        # elem.clear() # 这个不行会报错
+        input_elem.send_keys(model)
+        search_elem = self.driverwait.until_find_element(By.ID, "motorcycleTypeDialogSearch")
+        search_elem.click()
         # 网络延迟可能会出现较长时间的白屏加载界面
         # dialog.LoadingDlg(self.driver).wait_for_disappear() # 用这个会出错，本身就是个大提醒窗口，不可能消失的
         time.sleep(4)
@@ -631,9 +667,10 @@ class DajiabaoWeb:
         # 等待查询结果出来,新车购置价 会加载
         locator = (By.ID, "insuranceCarInfoNewCarPurchasePrice")
         WebDriverWait(self.driver, 2).until(EC.text_to_be_present_in_element_value(locator, fin_price))
-        pass
 
     def insert_sort(self, ilist):
+        """列表排序
+        """
         for i in range(len(ilist)):
             for j in range(i):
                 if ilist[i] < ilist[j]:
@@ -641,16 +678,86 @@ class DajiabaoWeb:
                     break
         return ilist
 
-
-
     def fill_car_info(self, data):
+        """车辆信息填写
+        """
         car_info_dict = self.car_info_ocr(data)
         data.update(car_info_dict)
         self.search_car_model(data)
 
+        # 使用性质++++++++++++++++++++++++++++++++++++++
+        nature_of_use = '家庭自用客车'
+        if data.get('使用性质'):
+            nature_of_use = data.get('使用性质')
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
+        self.driver.execute_script("arguments[0].click()", elem)
 
-        pass
+        # 获取列表，暂时使用
+        elem1 = self.driverwait.until_find_element(By.XPATH,f'//li[contains(string(),"{nature_of_use}")]/..')
+        text_list = []
+        for li in elem1.find_elements_by_tag_name('li'):
+            text_list.append(li.text)
+        print(text_list)
 
+        # 方式一 直接js设值，虽然可以成功，但是会造成后面相关选项不会自动正常加载，不行
+        # self.driver.execute_script('arguments[0].value="{}";'.format(nature_of_use), elem)
+        # 方式二 点选的方式
+        elem.send_keys(nature_of_use)
+        elem = self.driverwait.until_find_element(By.XPATH,f'//li[contains(string(),"{nature_of_use}")]')
+        elem.click()
+        # self.driver.execute_script("arguments[0].click()", elem) # li选项JS点击加载不了，不行
+
+        # 行车证车辆++++++++++++++++++++++++++++++++++++++
+        liceense_vehicle = 'K33'
+        if data.get('行车证车辆'):
+            liceense_vehicle = data.get('行车证车辆').upper()
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoMotorType"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+
+        # 获取列表项，合成大字典，指令匹配
+        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{liceense_vehicle}")]/..')
+        text_dict = {}
+        for li in elem1.find_elements_by_tag_name('li'):
+            text_dict[li.text[0:3]]= li.text
+        print(text_dict)
+
+        liceense_vehicle = text_dict[liceense_vehicle]
+        elem.send_keys(liceense_vehicle)
+        elem = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{liceense_vehicle}")]')
+        elem.click()
+        # self.driver.execute_script('arguments[0].value="{}";'.format(liceense_vehicle), elem)
+
+        # 能源类型++++++++++++++++++++++++++++++++++++++
+        energy_type = '燃油'
+        if data.get('燃料'):
+            fule_type = data.get('燃料')
+        # 使用性质
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoEnergyType"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+
+        # 获取列表，TODO 这里其实要有一个对应规则，和燃料种类对应起来，暂时先做燃油
+        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{energy_type}")]/..')
+        text_list = []
+        for li in elem1.find_elements_by_tag_name('li'):
+            text_list.append(li.text)
+        print(text_list)
+
+        elem.send_keys(energy_type)
+        elem = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{energy_type}")]')
+        elem.click()
+
+        # 验车情况++++++++++++++++++++++++++++++++++++++
+        elem = self.driver.find_element_by_xpath('//button[string()="验车信息"][ancestor::div[@class="el-form-item is-success is-required el-form-item--mini"]]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        # time.sleep(1)
+        # 选择 按期续保，未增加损失类险别
+        elem = self.driverwait.until_find_element(By.XPATH,'//span[text()="按期续保，未增加损失类险别"]/../descendant::span')
+        elem.click()
+        # self.driver.execute_script('arguments[0].checked=true;', elem)
+        # 确定
+        elem = self.driver.find_element_by_xpath('//button[@id="insuranceCarInfoCarCheckConfirm"]')
+        elem.click()
+        # self.driver.execute_script('arguments[0].click();', elem)
 
     def fill_person_car_info(self, data):
         options = data['options']
@@ -668,6 +775,7 @@ class DajiabaoWeb:
         # elem.send_keys(options['号牌种类'])
         elem.send_keys('52')
         # 点击其他地方刷新出号牌种类
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
         elem = self.driver.find_element_by_xpath("//*[contains(text(),'号牌种类：')]")
         elem.click()
 
