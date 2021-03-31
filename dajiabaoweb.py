@@ -348,8 +348,10 @@ class DajiabaoWeb:
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_IDCARD_RECOGNIZE)
 
     def fill_car_owner_info(self, data):
-        phone = '13461000555'
+        phone= data['手机']
         ownr_addr, card_id = self.idcard_ocr(data)
+        data['车主地址'] = ownr_addr
+        data['身份证号'] = card_id
         # 省份代码 根据网页内容修改过省名
         province_dic = {'11': '北京', '12': '天津', '13': '河北', '14': '山西', '15': '内蒙古', '22': '吉林',
                         '23': '黑龙江', '31': '上海', '32': '江苏', '33': '浙江', '35': '福建', '36': '江西',
@@ -483,9 +485,10 @@ class DajiabaoWeb:
             # elem.click()
             elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]/a/img')
             self.driver.execute_script("arguments[0].click()", elem)
-
+            t = time.time()
             # elem = self.driver.find_element_by_xpath('//span[text()="行驶证"]/..')
             elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="行驶证"]/..')
+            print(489,time.time()-t)
             time.sleep(0.5)
             self.driver.execute_script("arguments[0].click()", elem)
             # elem.click()
@@ -495,7 +498,7 @@ class DajiabaoWeb:
             time.sleep(0.5)
             # self.driver.execute_script("arguments[0].click()", elem)
             elem.click()
-
+            print(499, time.time()-t)
             time.sleep(2)
             # 鼠标光标默认在文件路径输入框，直接输入，回车就好了
             keyboard.write(file_path.strip())
@@ -692,7 +695,7 @@ class DajiabaoWeb:
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
         self.driver.execute_script("arguments[0].click()", elem)
 
-        # 获取列表，暂时使用
+        # 获取列表，后续使用
         elem1 = self.driverwait.until_find_element(By.XPATH,f'//li[contains(string(),"{nature_of_use}")]/..')
         text_list = []
         for li in elem1.find_elements_by_tag_name('li'):
@@ -736,7 +739,7 @@ class DajiabaoWeb:
         self.driver.execute_script("arguments[0].click()", elem)
 
         # 获取列表，TODO 这里其实要有一个对应规则，和燃料种类对应起来，暂时先做燃油
-        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{energy_type}")]/..')
+        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"燃油")]/..')
         text_list = []
         for li in elem1.find_elements_by_tag_name('li'):
             text_list.append(li.text)
@@ -759,649 +762,277 @@ class DajiabaoWeb:
         elem.click()
         # self.driver.execute_script('arguments[0].click();', elem)
 
-    def fill_person_car_info(self, data):
-        options = data['options']
-        # 是否新车：是
-        elem = self.driver.find_element_by_id('prpCitemCar.newCarFlag1')
-        elem.click()
-        # self.driver.execute_script('arguments[0].checked=true;', elem)
-        # 号牌号码清空
-        elem = self.driver.find_element_by_id('prpCitemCar.licenseNo')
-        elem.clear()
+    def vehicle_tax(self, data):
+        """车船税
+        """
+        elem = self.driver.find_element_by_xpath(
+            '//button[string()="验车信息"][ancestor::div[@class="el-form-item is-success is-required el-form-item--mini"]]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        elem = self.driverwait.until_find_element(By.XPATH,'//div[@id="insuranceCarboatCTaxpayerId"]/div/input')
+        elem.send_keys(data['身份证号'])
+        # 燃料种类
+        fule_type = '汽油'
+        if data.get('燃料'):
+            fule_type = data.get('燃料')
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarboatFuelType"]')
+        self.driver.execute_script("arguments[0].click()", elem)
 
-        # 号牌种类
-        elem = self.driver.find_element_by_id('LicenseTypeDes')
-        elem.clear()
-        # elem.send_keys(options['号牌种类'])
-        elem.send_keys('52')
-        # 点击其他地方刷新出号牌种类
-        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
-        elem = self.driver.find_element_by_xpath("//*[contains(text(),'号牌种类：')]")
-        elem.click()
+        # 获取列表，TODO 这里其实要有一个对应规则，和燃料种类对应起来，暂时先做燃油
+        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"汽油")]/..')
+        text_list = []
+        for li in elem1.find_elements_by_tag_name('li'):
+            text_list.append(li.text)
+        print(text_list)
 
-
-
-        # 发动机号
-        elem = self.driver.find_element_by_id('prpCitemCar.engineNo')
-        elem.clear()
-        elem.send_keys(options['发动机号'])
-        # self.driver.execute_script('arguments[0].value="{}";'.format(options['发动机号']), elem)
-
-        # VIN码
-        elem = self.driver.find_element_by_id('prpCitemCar.vinNo')
-        elem.clear()
-        elem.send_keys(options['车架号'])
-        # self.driver.execute_script('arguments[0].value="{}";'.format(options['车架号']), elem)
-
-
-        # 车辆种类
-        elem = self.driver.find_element_by_id('CarKindCodeDes')
-        elem.clear()
-        if options.get('车辆种类'):
-            elem.send_keys(options['车辆种类'])
-        else:
-            elem.send_keys('A01')
-        # 点击其他地方刷新出号牌种类
-        elem = self.driver.find_element_by_xpath("//*[contains(text(),'号牌种类：')]")
+        elem.send_keys(fule_type)
+        elem = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{fule_type}")]')
         elem.click()
 
-        today = datetime.date.today().isoformat()
-        # 初登日期
-        self.driver.find_element(By.ID, "imgBtnEnrollDate").click()
-        self.driverwait.until_find_element(By.XPATH, "//font[@id='cellText1']/span").click()
-        # elem = self.driver.find_element_by_id('prpCitemCar.enrollDate').send_keys(today)
-        # self.driver.execute_script('arguments[0].value="{}";'.format(today), elem)
-        # 发票日期
-        elem = self.driver.find_element_by_id('prpCitemCar.certifiCateDate')
-        elem.send_keys(today)
-        # self.driver.execute_script('arguments[0].value="{}";'.format(today), elem)
-
-        model = options['厂牌型号']
-        elem = self.driver.find_element_by_id('prpCitemCar.brandName')
-        elem.clear()
-        elem.send_keys(model)
-        # self.driver.execute_script('arguments[0].value="{}";'.format(model), elem)
-        elem = self.driver.find_element_by_id('prpCitemCar.vehicleBrand')
-        elem.clear()
-        elem.send_keys(model)
-        # self.driver.execute_script('arguments[0].value="{}";'.format(model), elem)
-        # 车辆查询
-        time.sleep(1)
-        elem = self.driver.find_element_by_id('vehicleModelInfo')
+    def set_date(self,data):
+        """设值交强险商业险起保日期
+        """
+        start_datetime = data['start_date']
+        elem = self.driver.find_element(By.ID, "compulsoryStartDate")
+        self.driver.execute_script(
+            'arguments[0].value="{}";'.format(start_datetime), elem)
         elem.click()
-        # 等待查询结果出来
-        locator = (By.ID, "prpCitemCar.vehicleBrand")
-        text = '特斯拉'
-        WebDriverWait(self.driver, 10).until(EC.text_to_be_present_in_element_value(locator, text))
-
-        elem = self.driver.find_element_by_id('prpCitemCar.seatCount')
-        elem.send_keys(Keys.CONTROL,"a")
-        # elem.clear() # 这个不行会报错
-        elem.send_keys(options['座位数'])
-
-        # 交易方式select下拉框
-        select = self.driver.find_element(By.ID, 'prpCmainCommon.payMethod')
-        select.click()
+        elem.send_keys(Keys.ENTER)
         time.sleep(0.5)
-        # select.find_element(By.XPATH, '//option[@value="01"]').click() # 这个不行
-        Select(self.driver.find_element_by_name("prpCmainCommon.payMethod")).select_by_value("01")
-        # 点击其他地方刷新出号牌种类
-        elem = self.driver.find_element_by_xpath("//*[contains(text(),'号牌种类：')]")
-        elem.click()
-
-    def add_person_msg(self, data):
-        num = 0
-        while num < 3:
-            try:
-                # 等待查询结果出来
-                locator = (By.ID, "prpCinsureds[0].insuredName")
-                text = data['姓名']
-                WebDriverWait(self.driver, 1.5).until(EC.text_to_be_present_in_element_value(locator, text))
-                return
-            except:
-                pass
-            elem = self.driver.find_element_by_id('prpCinsuredsview[0].identifyNumber')
-            elem.clear()
-            elem.send_keys(data['身份证号'])
-            elem = self.driver.find_element_by_id('save2_insured_4S')
-            elem.click()
-            try:
-                handle0 = self.driver.current_window_handle
-                # 等待查询结果出来
-                locator = (By.ID, "prpCinsureds[0].insuredName")
-                text = data['姓名']
-                WebDriverWait(self.driver, 1.5).until(EC.text_to_be_present_in_element_value(locator, text))
-                return
-            except BaseException :
-                num += 1
-                logger.info(f"not has info to add")
-                windows = self.driver.window_handles
-                # print(self.driver.current_window_handle)
-                # print(self.driver.window_handles)
-                if len(windows) == 3:
-                    for handle in windows:
-                        if handle != handle0:
-                            self.driver.switch_to.window(handle)
-                            time.sleep(0.5)
-                            self.driver.close() # 关闭当前一个界面
-                            # self.driver.quit() # 关闭所有网页
-                            break
-                    time.sleep(0.5)
-                    windows = self.driver.window_handles
-                    for handle in windows:
-                        if handle != handle0:
-                            handle1 = handle
-                            break
-                    self.driver.switch_to.window(handle1)
-                    self.driver.maximize_window()
-                    try:
-                        webdriverhelper.WebDriverHelper(self.driver, 1).until_find_element(By.XPATH, "//*[contains(text(),'继续浏览此网站(不推荐)')]").click()
-
-                        # locator = (By.ID, "overridelink")
-                        # text = '继续浏览此网站(不推荐)'
-                        # WebDriverWait(self.driver, 1).until(EC.text_to_be_present_in_element(locator, text))
-                        # elem = self.driver.find_element_by_xpath( "//*[contains(text(),'继续浏览此网站(不推荐)')]")
-                        # elem.click()
-
-                        # self.driver.get("javascript:document.getElementById('overridelink').click();")
-
-                        WebDriverWait(self.driver, 4).until(EC.visibility_of_element_located((By.XPATH, "//*[contains(text(),'居民与非居民：')]")))
-                    except:
-                        WebDriverWait(self.driver, 4).until(EC.visibility_of_element_located((By.XPATH, "//*[contains(text(),'居民与非居民：')]")))
-
-                    elem = self.driver.find_element_by_id('customerCName')
-                    elem.clear()
-                    elem.send_keys(data['姓名'])
-                    # 身份证有效期，不做限制，随便
-                    date = (datetime.date.today() + datetime.timedelta(days=365)).isoformat()
-                    elem = self.driver.find_element_by_id('dateValid')
-                    elem.clear()
-                    elem.send_keys(date)
-
-                    # 职业 select下拉框，不做限制
-                    select = self.driver.find_element(By.ID, 'professional')
-                    select.click()
-                    time.sleep(0.5)
-                    # select.find_element(By.XPATH, '//option[@value="20000"]').click() # 这个不行
-                    Select(self.driver.find_element_by_id("professional")).select_by_value("20000")
-
-                    # 切换界面
-                    self.driver.find_element(By.XPATH, "//*[contains(text(),'联系信息')]").click()
-                    # 电话新增按钮
-                    elem = self.driverwait.until_find_element(By.NAME, "buttonInsert")
-                    elem.click()
-                    elem = self.driverwait.until_find_element(By.ID, "phoneNumber")
-                    elem.send_keys(data['手机'])
-                    # 地址新增按钮 TODO 目前默认上海，随后更改
-                    elem = self.driverwait.until_find_element(By.ID, "addressInsertButton")
-                    elem.click()
-                    elem = self.driverwait.until_find_element(By.ID, "addresscnameCreate")
-                    elem.send_keys('上海')
-                    # 保存
-                    elem = self.driver.find_element(By.NAME, 'buttonSave')
-                    elem.click()
-                    # 一堆弹窗
-                    while len(self.driver.window_handles) > 1:
-                        self.handle_notice_dlg()
-
-                # 切回原来的录单界面，之前虽然在iframe中但是转了一圈回来后需要重新层层切进去
-                self.driver.switch_to.window(handle0)
-                self.driver.switch_to.frame("main")
-                self.driver.switch_to.frame("page")
-                # print(385, self.driver.current_window_handle)
-                # print(386, self.driver.window_handles)
-
-    def handle_notice_dlg(self, timeout=2):
-        """处理弹窗，此类弹窗没有代码，是网页自带要用专门的方法
-        """
-        noticedlg = NoticeDialog(self.driver)
-        if noticedlg.exists(timeout):
-            noticedlg.switch_to()
-            detail = noticedlg.detail_text
-            logger.info('found notice dialog: %s', detail)
-            # if '警示' in header:
-            #     logger.warning('dialog warn text: %s', detail)
-            # raise errors.RpaError(error=errors.E_PROC, message=detail)
-            if ('错误' in detail) or ('不一致' in detail):
-                raise errors.RpaError(error=errors.E_PROC, message=detail)
-            noticedlg.confirm()
-        else:
-            logger.info('not found notice dialog.')
-
-    def handle_select_notice_dlg(self):
-        """处理select弹窗，此类弹窗没有代码，是网页自带，输入代号刷新出界面后强制enter确认关闭界面
-        """
-        noticedlg = NoticeDialog(self.driver)
-        while noticedlg.exists(5):
-            logger.info('handle_select_notice_dlg found notice dialog')
-            ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-            time.sleep(1)
-
-    def add_services(self, input_id, service_code):
-        """增值服务
-        """
-        elem = self.driver.find_element_by_id('btn_add_kindSub')
-        elem.click()
-        # time.sleep(2)
-        elem1 = self.driverwait.until_find_element(By.ID, input_id)
-        elem1.click()
-        time.sleep(1)
-        elem1.send_keys(service_code)
-        # 点击任意位置
-        elem = self.driver.find_element_by_id('prpCitemKindsTemp[10].kindName')
-        elem.click()
-        self.handle_select_notice_dlg()
-
-    def safety_inspection(self):
-        """增值服务的安全检测项目
-        """
-        for i in range(10):
-            while True:
-                # elem = self.driver.find_element_by_id(f'prpCitemKindDetails[{i}].chooseFlag')
-                elem = self.driverwait.until_find_element(By.ID, f'prpCitemKindDetails[{i}].chooseFlag')
-                elem.click()
-                time.sleep(0.3)
-                try:
-                    elem = self.driver.find_element_by_id(f'prpCitemKindDetails[{i}].quantity')
-                    elem.send_keys('1')
-                    break
-                except:
-                    try:
-                        time.sleep(0.3)
-                        elem = self.driver.find_element_by_id(f'prpCitemKindDetails[{i}].quantity')
-                        elem.send_keys('1')
-                        break
-                    except:
-                        pass
-        ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-        try:
-            elem = self.driverwait.until_find_element(By.ID, f'prpCitemKindDetails[0].chooseFlag')
-            WebDriverWait(self.driver, 5).until(EC.invisibility_of_element(elem))
-        except:
-            ActionChains(self.driver).send_keys(Keys.ENTER).perform()
+        pass
 
     def fill_insurance_plan(self, data):
-        logger.info(f'fill_insurance_plan  data:{data}')
-        plan = data['plan']
-        # 交强险
-        elem = self.driver.find_element_by_id('prpCitemKindCI.familyNo')
-        self.driver.find_element_by_id("prpCinsuredReals[2].holdName").send_keys(Keys.TAB)
-        time.sleep(0.3)
-        elem.click()
+        """商业险
+        """
+        elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarboatFuelType"]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
 
+        plan = data['plan']
+        logger.info('fill_insurance_plan  plan: %s', plan)
         if '车损' in plan:
             logger.info('fill_insurance_plan  车损')
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[0].chooseFlag')
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车辆损失险"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            if data.get('总金额'):
-                elem = self.driver.find_element_by_id('prpCitemKindsTemp[0].amount')
-                elem.clear()
-                elem.send_keys(data['总金额'])
+            # elem = self.driver.find_element(By.XPATH, '//span[text()="车辆损失险"]/ancestor::tr/td[1]/descendant::input')
+            # self.driver.execute_script('arguments[0].checked=true;', elem)
+
+            # 免赔额
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车辆损失险"]/ancestor::tr/td[4]/descendant::input')
+            self.driver.execute_script("arguments[0].click()", elem)
+            # 获取列表
+            elem1 = self.driverwait.until_find_element(By.XPATH, f'//span[text()="300"]/ancestor::ul')
+            text_list = []
+            for li in elem1.find_elements_by_tag_name('li'):
+                text_list.append(li.text)
+            print(text_list)
+            # 选择
+            elem = self.driverwait.until_find_element(By.XPATH, f'//span[text()="300"]/ancestor::ul/descendant::li[contains(string(),"{plan["车损"]}")]')
+            elem.click()
 
         if '三者' in plan:
-            price = int(plan['三者'])
             logger.info('fill_insurance_plan  三者: %s', plan['三者'])
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[2].chooseFlag')
+            # self.driver.find_element(
+            #     By.XPATH, "//tr[@id=\'thirdPartyCoverage\']/td/input").click()
+            elem = self.driver.find_element(By.XPATH, '//span[text()="第三者责任险"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            if price >= 300:
-                price = '100-1000'
 
-            # 这个select下拉框和其他的不一样，不能直接操作，那个下拉按钮也定位不到，通过定位临近元素然后根据相对坐标强制点击
-            # TODO 分辨率不同网页窗口大小不同可能会造成失效，需要根据电脑调整
-            elem = self.driver.find_element(By.ID, 'amountView[2]')
-            ActionChains(self.driver).move_to_element_with_offset(elem, 67, 8).click().perform()
-            time.sleep(0.5)
-            Select(self.driver.find_element_by_id("selectOption[2]")).select_by_value(f"{price}")
+            # 免赔额
+            elem = self.driver.find_element(By.XPATH, '//span[text()="第三者责任险"]/ancestor::tr/td[3]/descendant::input')
+            self.driver.execute_script("arguments[0].click()", elem)
+            # 获取列表
+            elem1 = self.driverwait.until_find_element(By.XPATH, f'//span[text()="10万元"]/ancestor::ul')
+            text_list = []
+            for li in elem1.find_elements_by_tag_name('li'):
+                text_list.append(li.text)
+            print(850,text_list)
+
+            elem = self.driver.find_element(By.XPATH, '//span[text()="第三者责任险"]/ancestor::tr/td[3]/descendant::input')
+            elem.send_keys(plan["三者"])
+            # 选择
+            elem = self.driverwait.until_find_element(By.XPATH, f'//span[text()="10万元"]/ancestor::ul/descendant::li[contains(string(),"{plan["三者"]}万元")]')
+            elem.click()
 
         if '司机' in plan:
             logger.info('fill_insurance_plan  司机: %s', plan['司机'])
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[3].chooseFlag')
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车上人员责任险驾驶人座位"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[3].amount')
-            elem.clear()
-            elem.send_keys(plan['司机'])
+
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车上人员责任险驾驶人座位"]/ancestor::tr/td[2]/descendant::input[3]')
+            elem.send_keys(Keys.CONTROL, "a")
+            elem.send_keys(plan["司机"])
 
         if '乘客' in plan:
             logger.info('fill_insurance_plan  乘客: %s', plan['乘客'])
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[4].chooseFlag')
+            # elem = self.driver.find_element(By.XPATH, '//*[@id="checkbox8"]')
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车上人员责任险乘客座位"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[4].unitAmount')
-            elem.clear()
-            elem.send_keys(plan['乘客'])
+            # self.driver.execute_script('arguments[0].checked=true;', elem)
+            time.sleep(0.1)
+            elem = self.driver.find_element(By.XPATH, '//span[text()="车上人员责任险乘客座位"]/ancestor::tr/td[2]/descendant::input[1]')
+            elem.send_keys(Keys.CONTROL, "a")
+            elem.send_keys(plan["乘客"])
 
-        if '划痕' in plan:
-            num = plan['划痕']+'.00'
-            logger.info('fill_insurance_plan  划痕: %s', plan['划痕'])
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[6].chooseFlag')
+        # 开始 附加险
+        elem = self.driver.find_element(By.XPATH, '//span[text()="附加车轮单独损失险"]/ancestor::tr/td[1]/descendant::input/..')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        time.sleep(0.2)
+
+
+        if '道路救援' in plan:
+            logger.info('fill_insurance_plan  道路救援: %s', plan['道路救援'])
+            elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="道路救援服务特约条款"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            select = self.driver.find_element(By.ID, 'prpCitemKindsTemp[6].amount')
-            select.click()
-            time.sleep(0.3)
-            # Select(self.driver.find_element_by_name("prpCitemKindsTemp[6].amount")).select_by_value(f"{plan['划痕']}")
-            Select(self.driver.find_element_by_name("prpCitemKindsTemp[6].amount")).select_by_value(num)
+            # self.driver.execute_script('arguments[0].checked=true;', elem)
+            if plan['道路救援'] != 2: # 默认会刷新出2，就不需要设置了
+                elem = self.driver.find_element(By.XPATH, '//span[text()="道路救援服务特约条款"]/ancestor::tr/td[3]/descendant::input')
+                self.driver.execute_script("arguments[0].click()", elem)
+                # 获取列表
+                elem1 = self.driverwait.until_find_element(By.XPATH, f'//span[text()="2次"]/ancestor::ul')
+                text_list = []
+                for li in elem1.find_elements_by_tag_name('li'):
+                    text_list.append(li.text)
+                print('道路救援', text_list)
+                # 选择
+                elem = self.driverwait.until_find_element(By.XPATH, f'//span[text()="2次"]/ancestor::ul/descendant::li[contains(string(),"{plan["道路救援"]}次")]')
+                elem.click()
 
-            # 四项增值服务
-            # 道路救援
-            self.add_services(input_id="prpCitemKindsTemp[11].kindName", service_code='051064')
-            select = self.driver.find_element(By.ID, 'prpCitemKindsTemp[11].quantity')
-            select.click()
-            time.sleep(0.3)
-            Select(self.driver.find_element_by_id("prpCitemKindsTemp[11].quantity")).select_by_value('12')
-
-            # 代为驾驶
-            self.add_services(input_id="prpCitemKindsTemp[12].kindName", service_code='051080')
-            elem = self.driver.find_element_by_id('prpCitemKindsTemp[12].quantity')
+        if '代为驾驶' in plan:
+            elem = self.driver.find_element(By.XPATH, '//span[text()="代为驾驶服务特约条款"]/ancestor::tr/td[1]/descendant::input/..')
             elem.click()
-            elem.send_keys('1')
+            if plan['代为驾驶'] != 1: # 默认会刷新出1，就不需要设置了
+                elem = self.driver.find_element(By.XPATH, '//span[text()="代为驾驶服务特约条款"]/ancestor::tr/td[3]/descendant::input')
+                elem.send_keys(Keys.CONTROL, "a")
+                elem.send_keys(plan["代为驾驶"])
 
-            # 代为送检(取消了)
-            # self.add_services(input_id="prpCitemKindsTemp[13].kindName", service_code='051081')
-            # elem = self.driver.find_element_by_id('prpCitemKindsTemp[13].quantity')
-            # elem.click()
-            # elem.send_keys('1')
+        # 折扣系数
+        elem = self.driver.find_element(By.XPATH, '//*[text()="交强险预期赔付率:"]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        elem = self.driverwait.until_find_element(By.XPATH, '//input[@id="insuranceCoefficientBIInfoExpectedDiscountDoubleCoefficient"]')
+        elem.send_keys(Keys.CONTROL, "a")
+        elem.send_keys(str(plan["折扣系数"]))
 
-            # 安全检测
-            self.add_services(input_id="prpCitemKindsTemp[13].kindName", service_code='051079')
-            elem = self.driver.find_element_by_id('button_SafetyMonitoring')
-            elem.click()
-            self.safety_inspection()
-            # elem = self.driver.find_element_by_id('prpCitemKindDetails[0].chooseFlag')
-            # elem.click()
-            # elem = self.driver.find_element_by_id('prpCitemKindDetails[0].quantity')
-            # elem.send_keys('1')
-
-        # 开始报税
-        self.driver.find_element_by_id("ciInsureDemand.licenseNo").send_keys(Keys.TAB) # 目标界面下方input元素
-        time.sleep(0.3)
-        self.driver.find_element_by_id("prpCitemKindsTemp[8].amount").send_keys(Keys.TAB) # 再滚动到目标界面上方一点点，这样就正常显示了
-        time.sleep(0.3)
-        elem = self.driver.find_element_by_id('_ciFlagDowntxt_CarShipTax') # 点击显示
-        elem.click()
-        # 纳税类型select下拉框，免税
-        self.driverwait.until_find_element(By.ID, "prpCcarShipTax.taxType").click()
-        time.sleep(0.3)
-        Select(self.driver.find_element_by_id("prpCcarShipTax.taxType")).select_by_value('2')
-        # 行车证代码select下拉框，x01
-        self.driverwait.until_find_element(By.ID, "prpCcarShipTax.drivLicenseCode").click()
-        time.sleep(0.3)
-        Select(self.driver.find_element_by_id("prpCcarShipTax.drivLicenseCode")).select_by_value('X01')
-
-        self._submit()
-
-    def _submit(self):
-        # 保费试算
-        self.driver.find_element_by_id("prpCmain.proposalNo").send_keys(Keys.TAB)  # 滚动过去
-        num = 0
-        while num < 5:
-            self.driverwait.until_find_element(By.ID, "buttonPremium_1").click()
-            num += 1
-            time.sleep(1)
-            try:
-                # 等待总保费加载出来
-                price = self.driver.find_element_by_id('prpCmain.sumPremium1').get_attribute('value')
-                if price and price != '0':
-                    break
-            except BaseException:
-                pass
-        # 保存
-        elem = self.driver.find_element_by_id('buttonSave')
-        elem.click()
-        num = 0
-        while num < 5:
-            noticedlg = NoticeDialog(self.driver)
-            if noticedlg.exists(5):
-                noticedlg.switch_to()
-                detail = noticedlg.detail_text
-                logger.info('save found notice dialog: %s', detail)
-                if ('错误' in detail) or ('不一致' in detail) or ('不正确' in detail):
-                    raise errors.RpaError(error=errors.E_PROC, message=detail)
-                noticedlg.confirm()
-                if '投保单保存成功' in detail:
-                    break
-                    # match = re.search('报价单号: ([A-Z0-9]+)', detail)
-                    # if match:
-                    #     quotation_id = match.group(1)
-                    #     return quotation_id
-                # elem = self.driver.find_element_by_id('buttonSave')
-                # elem.click()
-                num += 1
-
-        # 提交核保
-        elem = self.driver.find_element_by_id('buttonSubmitUnw')
-        elem.click()
-        num = 0
-        while num < 10:
-            noticedlg = NoticeDialog(self.driver)
-            if noticedlg.exists(6):
-                noticedlg.switch_to()
-                detail = noticedlg.detail_text
-                logger.info('submit found notice dialog: %s', detail)
-                if ('错误' in detail) or ('不一致' in detail) or ('不正确' in detail):
-                    raise errors.RpaError(error=errors.E_PROC, message=detail)
-                noticedlg.confirm()
-                if '确认要提交' in detail:
-                    try:
-                        # 核保成功页面
-                        WebDriverWait(self.driver, 8).until(EC.presence_of_element_located((By.ID,'fm')))
-                        break
-                    except:
-                        pass
-                num += 1
-
-    def populate_insurance_data(self, data) -> dict:
-        """数据的额外处理，增加替换参数，如：完成指令中自定义数据代替固定计划中默认数据"""
-        if not ('owner_type' in data):
-            data['owner_type'] = 'person'
-        data['uniform_code'] = '01272'
-        data['uniform_name'] = '特斯拉汽车'
-        # effect_now = False
-        # if not data.get('start_date'):  # 及时生效
-        #     # 即时 生效的单子满足系统最小20分钟生效前提下尽早生效
-        #     effect_quicklly = datetime.datetime.fromtimestamp(time.time() + 22 * 60)
-        #     data['start_date'] = effect_quicklly.isoformat(sep=' ', timespec='minutes')
-
-        # if effect_now and data['owner_type'] == 'person':
-        #     data['payway'] = '微信支付'
-        # else:
-        #     data['payway'] = '聚合支付'
-        data['payway'] = '聚合支付'
-
-        plan = PLANS[data['plan']].copy()
-        # if '划痕' in plan:
-        #     if 'TSL7000BEVAR0' in data['model']:
-        #         plan['划痕'] = '5000'
-        custom = data.get('plan_custom')
-        if custom:
-            for option in custom:
-                if option.startswith('-'):
-                    key = option[1:]
-                    if key in plan:
-                        del plan[key]
-                    else:
-                        logger.warn(
-                            'try to remove plan option %s which does not exit', key)
-                elif option.startswith('+'):
-                    plan[option[1:]] = custom[option]
-                else:
-                    plan[option] = custom[option]
-        data['plan'] = plan
-        return data
-
-    def apply_payment(self, vin: str, payway_name: str = '微信支付') -> str:
-        """支付流程，未调试
+    def policy_holder(self,data):
+        """投保人、被保人资料
         """
-        # 切回助文档中再进入main
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame("main")
-        try:
-            elem = self.driver.find_element(By.XPATH, "//*[text()='投保单查询']")
+        print(918,data)
+        elem = self.driver.find_element(By.XPATH, '//input[@id="insuranceCoefficientBIInfoExpectedDiscountDoubleCoefficient"]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="同车主"]/../span[1]')
+        elem.click()
+        # 等待加载
+        locator = (By.XPATH, '//*[@id="insuranceApplicantInfoIdentifyNumber"]/div/input')
+        text = data['身份证号']
+        WebDriverWait(self.driver, 2).until(EC.text_to_be_present_in_element_value(locator, text))
+
+        if data.get('证件有效期'):
+            start_datetime = data['证件有效期']
+            elem = self.driver.find_element(By.ID, 'insuranceApplicantInfoIdentifyEndDate')
+            elem.send_keys(start_datetime)
+            # self.driver.execute_script('arguments[0].value="{}";'.format(start_datetime), elem)
             elem.click()
-        except:
-            elem = self.driver.find_element_by_xpath("//*[contains(text(),'投保管理')]")
-            elem.click()
-            elem = self.driverwait.until_find_element(By.XPATH, "//*[text()='投保单查询']")
-            elem.click()
-
-        # 界面操作在page中
-        self.driver.switch_to.frame("page")
-        elem = self.driverwait.until_find_element(By.ID, "prpCproposalVo.vinNo")
-        elem.send_keys(vin)
-        time.sleep(0.5)
-
-        self.driver.find_element(By.ID, "insured_btn_Save").click()
-        try:
-            prev_pid = self.get_pid("iexplore.exe")
-            # handle0 = self.driver.current_window_handle
-            self.driverwait.until_find_element(By.ID, "ichkbox").click()
-            self.driver.find_element(By.XPATH, "//*[@id='buttonView']/preceding-sibling::input[@value='缴费']").click()
-        except TimeoutException:
-            return
-
-        # 点击 缴费 后跳出来新的界面
-        # windows = self.driver.window_handles
-        # print(windows)
-        # for handle in windows:
-        #     if handle != handle0:
-        #         handle1 = handle
-        #         break
-        # self.driver.switch_to.window(handle1)
-        # time.sleep(2)
-
-        # 绕过缴费页面的签名错误问题
-        WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(2))
-        main_win = self.driver.current_window_handle
-        for handle in self.driver.window_handles:
-            if handle != main_win:
-                self.driver.switch_to.window(handle)
-                break
+            elem.send_keys(Keys.ENTER)
+            time.sleep(0.5)
         else:
-            raise Exception('No pop window')
-        src = self.driver.find_element_by_id('page').get_attribute('src')
-        self.driver.close()
-        self.driver.switch_to.window(main_win)
+            # try:
+            #     elem = self.driver.find_element(By.ID, 'insuranceApplicantInfoIdentifyEndDate')
+            #     elem.send_keys('2021-12-12')
+            #     print(940)
+            # except:
+            #     start_datetime = '2021-12-12'
+            #     elem = self.driver.find_element(By.ID, 'insuranceApplicantInfoIdentifyEndDate')
+            #     self.driver.execute_script('arguments[0].value="{}";'.format(start_datetime), elem)
+            #     print(944)
+            # 长期有效
+            elem = self.driver.find_element(By.XPATH, '//span[text()="长期有效"]/../span[1]')
+            elem.click()
 
-        self.driver.execute_script(f"window.open('{src}')")
-        WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(2))
-        for handle in self.driver.window_handles:
-            if handle != main_win:
-                self.driver.switch_to.window(handle)
-                self.driver.get("javascript:document.getElementById('overridelink').click();")
-                break
-        else:
-            raise Exception('No pop window')
-        self.driver.maximize_window()
+        # 电子邮箱
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoCEmail"]/div/input')
+        elem.send_keys(data['邮箱'])
+        # 手机
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoMobile"]/div/input')
+        elem.send_keys(Keys.CONTROL, "a")
+        elem.send_keys(data['手机'])
 
-        # 交易方式select
-        select = self.driverwait.until_find_element(By.ID, 'payTypeNo')
-        select.click()
-        time.sleep(0.5)
-        # 微信支付
-        Select(self.driver.find_element_by_id("payTypeNo")).select_by_value("14")
-        # 保存
-        self.driver.find_element_by_id("buttonSave").click()
-        self.handle_notice_dlg()
-        time.sleep(2)
-        # print(self.driver.window_handles)
-        # print(self.driver.current_window_handle)
+        # 洗钱风险
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoCustomerIndustry"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        time.sleep(0.2)
+        elem.send_keys('其他行业')
+        # 页面上有两个一毛一样的元素，就用last()函数
+        elem = self.driverwait.until_find_element(By.XPATH,'(//ul[./li/span[text()="金融业"]])[last()]/li[./span[text()="其他行业"]]')
+        elem.click()
 
-        # 缴费确认界面-操作
-        self.driverwait.until_find_element(By.ID, 'prpJfPayRecords[0].operate').click()
-        noticedlg = NoticeDialog(self.driver)
-        if noticedlg.exists(5):
-            logger.debug('apply_payment found notice dialog')
-            for i in range(4):
-                ActionChains(self.driver).send_keys(Keys.TAB).perform()
-                time.sleep(0.2)
-            ActionChains(self.driver).send_keys(Keys.DOWN).perform()
-            time.sleep(0.2)
-            ActionChains(self.driver).send_keys(Keys.DOWN).perform()
-            time.sleep(0.2)
-            ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-            time.sleep(0.2)
-
-            # document.getElementById('prpJfPayRecords[0].checkNo).getBoundingClientRect()
-            # {bottom: 225, left: 218, right: 553, top: 207}
-            # 坐标点击不管用
-            # elem = self.driver.find_element(By.ID, 'prpJfPayRecords[0].checkNo')
-            # ActionChains(self.driver).move_to_element_with_offset(elem, 402, 18).click().perform()
-            # ActionChains(self.driver).move_to_element_with_offset(elem, 410, 25).click().perform()
-            # ActionChains(self.driver).move_to_element_with_offset(elem, 390, 18).click().perform()
-            # # 键盘输入也不管用
-            # ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-            # ActionChains(self.driver).send_keys(Keys.SPACE).perform()
-
-            # prev_pid = self.get_pid("iexplore.exe")
-            logger.debug(f'apply_payment prev_pid :{prev_pid}')
-            for i in self.get_pid("iexplore.exe"):
-                if i not in prev_pid:
-                    try:
-                        self.ie = IeAuto(i)
-                        # 缴费确认
-                        self.ie.regist_confirm()
-                        # 再次确认
-                        self.ie.confirm()
-                    except BaseException as e:
-                        logger.debug(f'apply_payment 缴费确认 has err:{e}')
-                        continue
-
-        # 确认弹窗消失后，再次点击 '操作' 查看二维码
-        self.driverwait.until_find_element(By.ID, 'prpJfPayRecords[0].operate').click()
+        # 职业洗钱风险  不便分类的其他从业人员 x 2
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoProfession"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        time.sleep(0.2)
+        elem.send_keys('不便分类的其他从业人员')
+        # 页面上有两个一毛一样的元素，就用last()函数
+        elem = self.driverwait.until_find_element(By.XPATH, '(//ul[./li/span[text()="不便分类的其他从业人员"]])[last()]/li[./span[text()="不便分类的其他从业人员"]]')
+        elem.click()
         time.sleep(1)
 
-        pay_content_path = self.screenshot_mgr.new_screenshot_name()
-        try:
-            # .capture_as_image().save(img_path)
-            self.ie.pay_code.capture_as_image().save(pay_content_path)
-            # self.ie.pay_code.screenshot(pay_content_path)
-        except BaseException as e:
-            logger.debug(f'apply_payment capture_as_image has err:{e}')
-        logger.debug('payment qrcode path is: %s', pay_content_path)
-        return pay_content_path
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoProfessionMiddle"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        time.sleep(0.2)
+        elem.send_keys('不便分类的其他从业人员')
+        # 页面上有两个一毛一样的元素，就用last()函数
+        elem = self.driverwait.until_find_element(By.XPATH,'(//ul[./li/span[text()="不便分类的其他从业人员"]])[last()]/li[./span[text()="不便分类的其他从业人员"]]')
+        elem.click()
 
-    def get_pid(self, name):
-        '''作用：根据进程名获取进程pid
-        '''
-        pids = psutil.process_iter()
-        pid_list = []
-        for pid in pids:
-            if (pid.name() == name):
-                pid_list.append(pid.pid)
-                logger.debug(f'get_pid find pid:{pid.pid}')
-        return pid_list
+        # 洗钱风险登记
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoRiskGrade"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        time.sleep(0.2)
+        elem = self.driverwait.until_find_element(By.XPATH, '(//ul[./li/span[text()="低风险"]])[last()]/li[./span[text()="低风险"]]')
+        elem.click()
 
-    @entry_wrap
-    def apply_insurance_ticket(self, task):
-        """网页操作的主入口
-        """
-        logger.info('apply insurance ticket: %s', task)
-        task = self.populate_insurance_data(task)
-        # logger.info('after populate data: %s', task)
-        self.open()
-        self.login()
-        # self.goto_car_info(task.get('经办人'))
-        self.goto_car_info()
-        owner_type = task['owner_type']
-        if owner_type == 'person':
-            self.fill_person_car_info(task)
-            self.add_person_msg(task)
-            self.fill_insurance_plan(task)
-            # quotation_id = self.fill_insurance_info_person(task)
-        # elif owner_type == 'enterprise':
-        #     self.fill_enterprise_car_info(task)
-        #     self.fill_insurance_plan(task)
-        #     quotation_id = self.fill_insurance_info_enterprise(task)
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceApplicantInfoConfirm"]')
+        elem.click()
+        if '确认成功' in self.handle_success_dlg(timeout=3):
+            logger.info('客户确认成功')
+        self.handle_err_dlg(timeout=0.5)
+
+        # 被保人 同车主
+        elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="同投保人"]/../span[1]')
+        elem.click()
+        # 等待加载
+        locator = (By.XPATH, '//*[@id="insuranceApplicantInfoIdentifyNumber"]/div/input')
+        text = data['身份证号']
+        WebDriverWait(self.driver, 2).until(EC.text_to_be_present_in_element_value(locator, text))
+
+
+    def handle_success_dlg(self, timeout=2):
+        dlg_success = dialog.SuccessMsgDlg(self.driver)
+        if dlg_success.exists(timeout):
+            detail = dlg_success.get_content()
+            logger.info('found success dialog: %s', detail)
+            dlg_success.close()
+            return  detail
         else:
-            raise errors.RpaError(
-                error=errors.E_UNKOWN, message=strings.err_unknown)
-        # task['quotation_id'] = quotation_id
-        # quotation_preview = self.get_quotation_preview(
-        #     quotation_id=quotation_id)
-        # task['quotation_preview'] = quotation_preview
-        # time.sleep(5)
-        qrcode = self.apply_payment(vin=task['options']['车架号'], payway_name=task['payway'])
-        if qrcode:
-            task['qrcode'] = qrcode
-        return task
+            logger.info('not found success dialog.')
+
+    def handle_err_dlg(self, timeout=2):
+        dlg_fail = dialog.ErrorMsgDlg(self.driver)
+        if dlg_fail.exists(timeout):
+            err_msg = dlg_fail.get_content()
+            logger.info('found err dialog: %s', err_msg)
+            dlg_fail.close()
+            return err_msg
+        else:
+            logger.info('not found err dialog.')
+
+    def handle_warning_dlg(self, timeout=2):
+        dlg_warning = dialog.WarningDlg(self.driver)
+        if dlg_warning.exists(timeout):
+            warning_msg = dlg_warning.get_content()
+            logger.info('found warning dialog: %s', warning_msg)
+            dlg_warning.close()
+            return warning_msg
+        else:
+            logger.info('not found warning dialog.')
+
+
 
 
 if __name__ == "__main__":
@@ -1414,27 +1045,38 @@ if __name__ == "__main__":
     w = DajiabaoWeb(web_screenshot_mgr)
     w.open()
     w.login()
-    # '姓名': '贾晓璞', '身份证号': '410324199407070612'
-    data = {'options': {'车架号': 'LRW3E7FA2LC146763', '发动机号': 'TG1203330046NM', '厂牌型号': 'TSL7000BEVAR1',
-                        '姓名': '王皎莹', '身份证号': '320504197711303526', '住址': ' 上海市长宁区延安西路900号', '性别': '男', '车主类型': '个人',
-                        'mobile': '18621998758', '手机': '18621998758',
-                        '邮箱': 'zhang_xuelin@126.com', 'email': 'zhang_xuelin@126.com', 'plan': '基本款',
-                        '生效': '2020-10-03 00:00', 'start_date': '2020-10-03 00:00',
-                        '经办人': '王谨飞', 'agent': '王谨飞','座位数':'6','总金额':'255550',},
-            '姓名': '王皎莹', '身份证号': '320504197711303526','总金额':'255550','mobile': '18621998758', '手机': '18621998758',
-            'plan':{
-                '交强': True,
-                '三者': '200',
-                '车损': True,
-                '划痕': '5000',
-                '司机': '20000',
-                '乘客': '20000',
-            },
-            }
+    # data = {'options': {'车架号': 'LRW3E7FA2LC146763', '发动机号': 'TG1203330046NM', '厂牌型号': 'TSL7000BEVAR1',
+    #                     '姓名': '王皎莹', '身份证号': '320504197711303526', '住址': ' 上海市长宁区延安西路900号', '性别': '男', '车主类型': '个人',
+    #                     'mobile': '18621998758', '手机': '18621998758',
+    #                     '邮箱': 'zhang_xuelin@126.com', 'email': 'zhang_xuelin@126.com', 'plan': '基本款',
+    #                     '生效': '2020-10-03 00:00', 'start_date': '2020-10-03 00:00',
+    #                     '经办人': '王谨飞', 'agent': '王谨飞','座位数':'6','总金额':'255550',},
+    #         '姓名': '王皎莹', '身份证号': '320504197711303526','总金额':'255550','mobile': '18621998758', '手机': '18621998758',
+    #         'plan':{
+    #             '交强': True,
+    #             '三者': '200',
+    #             '车损': True,
+    #             '划痕': '5000',
+    #             '司机': '20000',
+    #             '乘客': '20000',
+    #         },
+    #         }
+    data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11',
+             'plan':{'车损':'1000',
+                     '三者':'50',
+                     '司机':'5000',
+                     '乘客':'5000',
+                     '道路救援':'5',
+                     '代为驾驶':'2',
+                     '折扣系数':'1.35'}
+             }
     w.goto_category_page()
     w.fill_header_info(data)
     w.fill_car_owner_info(data)
-    w.fill_car_info(data={})
+    w.fill_car_info(data)
+    w.vehicle_tax(data)
+    w.fill_insurance_plan(data)
+    w.policy_holder(data)
     # w.fill_person_car_info(data)
     # w.add_person_msg(data)
     # w.fill_insurance_plan(data)

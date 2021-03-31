@@ -12,10 +12,10 @@ class LoadingDlg:
     """加载对话框，如点击车型查询后的白屏"""
     def __init__(self, driver):
         self.driver = driver
-        self.driverwait = webdriverhelper.WebDriverHelper(driver, 2)
         self.root = None
 
     def exists(self, timeout=2.0):
+        self.driverwait = webdriverhelper.WebDriverHelper(self.driver, timeout)
         if self.root:
             return True
         try:
@@ -41,10 +41,10 @@ class WarningDlg:
     """提醒对话框"""
     def __init__(self, driver):
         self.driver = driver
-        self.driverwait = webdriverhelper.WebDriverHelper(driver, 2)
         self.root = None
 
     def exists(self, timeout=2.0):
+        self.driverwait = webdriverhelper.WebDriverHelper(self.driver, timeout)
         if self.root:
             return True
         try:
@@ -80,10 +80,10 @@ class ErrorMsgDlg:
     """失败或错误提示对话框"""
     def __init__(self, driver):
         self.driver = driver
-        self.driverwait = webdriverhelper.WebDriverHelper(driver, 2)
         self.root = None
 
     def exists(self, timeout=3.0):
+        self.driverwait = webdriverhelper.WebDriverHelper(self.driver, timeout)
         if self.root:
             return True
         try:
@@ -120,10 +120,10 @@ class SuccessMsgDlg:
     """成功提示对话框"""
     def __init__(self, driver):
         self.driver = driver
-        self.driverwait = webdriverhelper.WebDriverHelper(driver, 2)
         self.root = None
 
     def exists(self, timeout=2.0):
+        self.driverwait = webdriverhelper.WebDriverHelper(self.driver, timeout)
         if self.root:
             return True
         try:
