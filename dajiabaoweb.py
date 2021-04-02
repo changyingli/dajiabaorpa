@@ -1,6 +1,7 @@
 # coding=utf8
 from subprocess import run as prun
-import datetime
+from datetime import datetime, date, timedelta
+from io import StringIO
 import logging
 import json
 import os
@@ -28,6 +29,7 @@ from pywinauto.application import Application
 
 import script
 import dialog
+import settings
 import webdriverhelper
 import msg as strings
 import errors
@@ -301,22 +303,10 @@ class DajiabaoWeb:
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_MSG_LOAD)
 
     def idcard_ocr(self, data):
-        # files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\不是身份证.png'},
-        #         {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},]
-        files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'}, ]
-        # 点击识别按钮  input和img都不能点击，要点击外层的div
-        # prv_chrome_pid_list = self.get_pid("chrome.exe")
-        # print(prv_chrome_pid_list)
-        # logger.debug(f'prv_chrome_pid_list:{prv_chrome_pid_list}')
-        # self.driver.find_element_by_xpath('//div[./input[@id="insuranceCarOwncarOwnImgMessageOCR"]]').click()
-        # cur_chrome_pids = self.get_pid("chrome.exe")
-        # logger.debug(f'cur_chrome_pid_list:{cur_chrome_pids}')
-        # print(cur_chrome_pids)
-        # pid_list = [i for i in cur_chrome_pids if i not in prv_chrome_pid_list]
-        # print(pid_list)
-        # self.chrome_auto = ChromeAuto(pid_list[0])
-        # self.chrome_auto.send_file(file_path=file_path)
-        for f in files:
+        """身份证识别
+        """
+        files = data['files']
+        for index,f in enumerate(files):
             file_path = f['path']
             self.driver.find_element_by_xpath('//div[./input[@id="insuranceCarOwncarOwnImgMessageOCR"]]').click()
             time.sleep(2)
@@ -331,8 +321,11 @@ class DajiabaoWeb:
                     ownr_addr = elem.get_attribute('value')
                     elem = self.driver.find_element_by_xpath('//*[@id="insuranceCarOwnInfoIdentifyNumber"]/div/input')
                     card_id = elem.get_attribute('value')
-                    print([333, ownr_addr, card_id])
-                    return [ownr_addr, card_id]
+                    elem = self.driver.find_element_by_xpath('//*[@id="insuranceCarOwnInfoCarOwnName"]/div/input')
+                    owner_name = elem.get_attribute('value')
+                    print([333, ownr_addr, card_id, owner_name])
+                    data['身份证索引'] = index # 车辆识别的时候就不需要重复识别了
+                    return [ownr_addr, card_id, owner_name]
                 else:
                     print(342)
                     # time.sleep(3)
@@ -349,9 +342,10 @@ class DajiabaoWeb:
 
     def fill_car_owner_info(self, data):
         phone= data['手机']
-        ownr_addr, card_id = self.idcard_ocr(data)
+        ownr_addr, card_id, owner_name = self.idcard_ocr(data)
         data['车主地址'] = ownr_addr
         data['身份证号'] = card_id
+        data['车主姓名'] = owner_name
         # 省份代码 根据网页内容修改过省名
         province_dic = {'11': '北京', '12': '天津', '13': '河北', '14': '山西', '15': '内蒙古', '22': '吉林',
                         '23': '黑龙江', '31': '上海', '32': '江苏', '33': '浙江', '35': '福建', '36': '江西',
@@ -452,18 +446,23 @@ class DajiabaoWeb:
         comfirm_elem.click()
         # self.driver.execute_script("arguments[0].click()", comfirm_elem)
 
-        dlg_success = dialog.SuccessMsgDlg(self.driver)
-        dlg_fail = dialog.ErrorMsgDlg(self.driver)
-        for i in range(10):
-            if not dlg_success.exists():
-                print(457)
-                time.sleep(0.5)
-        if dlg_success.exists():
-            logger.info(f'{dlg_success.get_content()}')
-            dlg_success.close()
-        if dlg_fail.exists(timeout=0.5):
-            err_msg = dlg_fail.get_content()
+        self.handle_success_dlg(timeout=5)
+        err_msg = self.handle_err_dlg(timeout=0.5)
+        if err_msg:
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CUSTOMER_CONFIRM.format(err_msg))
+
+        # dlg_success = dialog.SuccessMsgDlg(self.driver)
+        # dlg_fail = dialog.ErrorMsgDlg(self.driver)
+        # for i in range(10):
+        #     if not dlg_success.exists():
+        #         print(457)
+        #         time.sleep(0.5)
+        # if dlg_success.exists():
+        #     logger.info(f'{dlg_success.get_content()}')
+        #     dlg_success.close()
+        # if dlg_fail.exists(timeout=0.5):
+        #     err_msg = dlg_fail.get_content()
+        #     raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CUSTOMER_CONFIRM.format(err_msg))
 
     def car_info_ocr(self, data):
         """识别行驶证,得到车辆相关各种信息
@@ -474,8 +473,12 @@ class DajiabaoWeb:
         # files = [
         #         {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'},
         #          {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},]
-        files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'}, ]
-        for f in files:
+        # files = [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'}, ]
+        files = data['files']
+        for index,f in enumerate(files):
+            # 不要重复识别
+            if index == data['身份证索引']:
+                continue
             print(463,f)
             file_path = f['path']
             # 点击识别按钮
@@ -486,16 +489,15 @@ class DajiabaoWeb:
             elem = self.driver.find_element_by_xpath('//div[@class="isPlate"][../div[@id="insuranceCarInfoLicensePlateNumber"]]/a/img')
             self.driver.execute_script("arguments[0].click()", elem)
             t = time.time()
-            # elem = self.driver.find_element_by_xpath('//span[text()="行驶证"]/..')
-            elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="行驶证"]/..')
-            print(489,time.time()-t)
-            time.sleep(0.5)
-            self.driver.execute_script("arguments[0].click()", elem)
-            # elem.click()
+            # 一期只做行驶证，默认的就是
+            # elem = self.driverwait.until_find_element(By.XPATH, '//span[text()="行驶证"]/..')
+            # print(489,time.time()-t)
+            # time.sleep(0.5)
+            # self.driver.execute_script("arguments[0].click()", elem)
 
-            elem = self.driver.find_element_by_xpath('//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
-            # elem = self.driverwait.until_find_element(By.XPATH,'//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
-            time.sleep(0.5)
+            elem = self.driverwait.until_find_element(By.XPATH, '//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
+            # elem = self.driver.find_element_by_xpath('//input[@id="carOcrInput"]/../button[./span[text()="确认"]]')
+            # time.sleep(0.5)
             # self.driver.execute_script("arguments[0].click()", elem)
             elem.click()
             print(499, time.time()-t)
@@ -522,22 +524,27 @@ class DajiabaoWeb:
                     return ret_dict
                 else:
                     print(496)
-                    dlg = dialog.ErrorMsgDlg(self.driver)
-                    # if dlg.exists(timeout=0.5) and '识别失败' in dlg.get_content():
-                    if dlg.exists():
-                        logger.info(f'{dlg.get_content()}')
-                        print(493,dlg.get_content())
-                        dlg.close()
-                        print("11行驶证识别失败")
+                    if self.handle_err_dlg():
                         break
+                    if self.handle_warning_dlg():
+                        break
+                    print(534)
 
-                    dlg = dialog.WarningDlg(self.driver)
-                    print(530)
-                    if dlg.exists():
-                        logger.info(f'{dlg.get_content()}')
-                        print(511, dlg.get_content())
-                        dlg.close()
-                        break
+                    # dlg = dialog.ErrorMsgDlg(self.driver)
+                    # if dlg.exists():
+                    #     logger.info(f'{dlg.get_content()}')
+                    #     print(493,dlg.get_content())
+                    #     dlg.close()
+                    #     print("11行驶证识别失败")
+                    #     break
+                    #
+                    # dlg = dialog.WarningDlg(self.driver)
+                    # print(530)
+                    # if dlg.exists():
+                    #     logger.info(f'{dlg.get_content()}')
+                    #     print(511, dlg.get_content())
+                    #     dlg.close()
+                    #     break
         else:
             print("行驶证识别失败")
             raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CAR_INFO_RECOGNIZE)
@@ -550,18 +557,10 @@ class DajiabaoWeb:
         elem = self.driver.find_element_by_xpath('//button[@id="insuranceCarInfoMotorcycleType"]')
         self.driver.execute_script("arguments[0].click()", elem)
         print(536,time.time()-t)
-        dlg = dialog.ErrorMsgDlg(self.driver)
-        dlg2 = dialog.WarningDlg(self.driver)
-        for i in range(4):
-            time.sleep(1)
-            if dlg.exists():
-                logger.info(f'search_car_model ErrorMsgDlg:{dlg.get_content()}')
-                dlg.close()
-                break
-            if dlg2.exists():
-                logger.info(f'search_car_model WarningDlg:{dlg2.get_content()}')
-                dlg2.close()
-                break
+        self.handle_warning_dlg(timeout=5)
+        self.handle_err_dlg(timeout=1)
+
+
         # # 直接点击 查询
         # search_elem = self.driverwait.until_find_element(By.ID,"motorcycleTypeDialogSearch")
         # search_elem.click()
@@ -625,6 +624,8 @@ class DajiabaoWeb:
             select_index = 16
 
         print(566,time_index,price_index,select_index)
+        # 必须等待tr加载出来，主界面有tbody但是为空，需要等待他下面的tr加载出来
+        self.driverwait.until_find_elements(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__header-wrapper']/../div[@class='el-table__body-wrapper is-scrolling-none']/table/tbody/tr")
         # tbody_elem = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody")
         tbody_elem = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__header-wrapper']/../div[@class='el-table__body-wrapper is-scrolling-none']/table/tbody")
         # tbody_elem = self.driver.find_element_by_xpath("//tr[contains(string(),'新车购置价' )]/ancestor::div[@class='el-table__fixed-right']/div[@class='el-table__fixed-body-wrapper']/table/tbody")
@@ -691,16 +692,20 @@ class DajiabaoWeb:
         # 使用性质++++++++++++++++++++++++++++++++++++++
         nature_of_use = '家庭自用客车'
         if data.get('使用性质'):
-            nature_of_use = data.get('使用性质')
+            nature_of_use = settings.NATURE_OF_USE[data.get('使用性质')]
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
         self.driver.execute_script("arguments[0].click()", elem)
 
         # 获取列表，后续使用
         elem1 = self.driverwait.until_find_element(By.XPATH,f'//li[contains(string(),"{nature_of_use}")]/..')
-        text_list = []
-        for li in elem1.find_elements_by_tag_name('li'):
-            text_list.append(li.text)
-        print(text_list)
+        # text_list = []
+        # for li in elem1.find_elements_by_tag_name('li'):
+        #     text_list.append(li.text)
+        # print(text_list)
+        # NATURE_OF_USE = {}
+        # for index,li in enumerate(elem1.find_elements_by_tag_name('li')):
+        #     NATURE_OF_USE[f'A{index}'] = li.text
+        # print(NATURE_OF_USE)
 
         # 方式一 直接js设值，虽然可以成功，但是会造成后面相关选项不会自动正常加载，不行
         # self.driver.execute_script('arguments[0].value="{}";'.format(nature_of_use), elem)
@@ -717,18 +722,18 @@ class DajiabaoWeb:
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoMotorType"]')
         self.driver.execute_script("arguments[0].click()", elem)
 
-        # 获取列表项，合成大字典，指令匹配
-        elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{liceense_vehicle}")]/..')
-        text_dict = {}
-        for li in elem1.find_elements_by_tag_name('li'):
-            text_dict[li.text[0:3]]= li.text
-        print(text_dict)
+        # 动态获取列表项，合成大字典，指令匹配
+        # elem1 = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{liceense_vehicle}")]/..')
+        # text_dict = {}
+        # for li in elem1.find_elements_by_tag_name('li'):
+        #     text_dict[li.text[0:3]]= li.text
+        # print(text_dict)
+        # liceense_vehicle = text_dict[liceense_vehicle]
 
-        liceense_vehicle = text_dict[liceense_vehicle]
+        liceense_vehicle = settings.LICEENSE_VEHICLE[liceense_vehicle]
         elem.send_keys(liceense_vehicle)
         elem = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{liceense_vehicle}")]')
         elem.click()
-        # self.driver.execute_script('arguments[0].value="{}";'.format(liceense_vehicle), elem)
 
         # 能源类型++++++++++++++++++++++++++++++++++++++
         energy_type = '燃油'
@@ -787,18 +792,6 @@ class DajiabaoWeb:
         elem.send_keys(fule_type)
         elem = self.driverwait.until_find_element(By.XPATH, f'//li[contains(string(),"{fule_type}")]')
         elem.click()
-
-    def set_date(self,data):
-        """设值交强险商业险起保日期
-        """
-        start_datetime = data['start_date']
-        elem = self.driver.find_element(By.ID, "compulsoryStartDate")
-        self.driver.execute_script(
-            'arguments[0].value="{}";'.format(start_datetime), elem)
-        elem.click()
-        elem.send_keys(Keys.ENTER)
-        time.sleep(0.5)
-        pass
 
     def fill_insurance_plan(self, data):
         """商业险
@@ -1001,6 +994,338 @@ class DajiabaoWeb:
         text = data['身份证号']
         WebDriverWait(self.driver, 2).until(EC.text_to_be_present_in_element_value(locator, text))
 
+    def get_calculate_dlg_msg(self):
+        """点击计算保费得到所有弹窗提示信息的列表
+        """
+        # 点击计算保费
+        elem = self.driver.find_element(By.XPATH, '//*[@id="calculatePremium"]')
+        elem.click()
+        success_msg_list = []
+        err_or_warning_msg_list = []
+        time.sleep(5)
+        while True:
+            print(1031)
+            success_dlg = dialog.SuccessMsgDlg(self.driver)
+            err_dlg = dialog.ErrorMsgDlg(self.driver)
+            warning_dlg = dialog.WarningDlg(self.driver)
+            if success_dlg.exists():
+                success_text = success_dlg.get_content()
+                logger.info('成功提示窗口： %s', success_text)
+                success_msg_list.append(success_text)
+                success_dlg.close()
+                # 得到两个消息后就是成功了
+                prompt = '\n'.join(success_msg_list)
+                if ('暂存成功' and '计算成功') in prompt:
+                    print(1032,prompt)
+                    break
+            if err_dlg.exists():
+                err_msg = err_dlg.get_content()
+                logger.info('错误提示窗口： %s', err_msg)
+                err_or_warning_msg_list.append(err_msg)
+                err_dlg.close()
+            if warning_dlg.exists():
+                warning_msg = warning_dlg.get_content()
+                logger.info('警示提示窗口： %s', warning_msg)
+                err_or_warning_msg_list.append(warning_msg)
+                warning_dlg.close()
+            if not (success_dlg.exists(timeout=0.5) or err_dlg.exists(timeout=0.5) or warning_dlg.exists(timeout=0.5)):
+                print('结束了')
+                break
+        print(success_msg_list,err_or_warning_msg_list)
+        return success_msg_list,err_or_warning_msg_list
+
+    def analysis_insurance_effect_date(self, content):
+        """从弹窗内容解析出终保日期，确定起保日期
+        return:{'交强险': '2021-04-22', '商业险': '20210606'}
+        """
+        re_date = re.compile('终保日期.*?(\d+-\d+-\d+)') # 交强险 2021-01-01 00:00
+        re_date1 = re.compile('终保日期.*?(\d{8})') # 商业险 202101010000
+        buf = StringIO(content)
+        state = None
+        commerce_text = '商业险'
+        compul_text = '交强险'
+        result = {}
+        for line in buf:
+            if line.startswith(commerce_text):
+                state = commerce_text
+            elif line.startswith(compul_text):
+                state = compul_text
+            if not state:
+                continue
+
+            rst = re_date.search(line)
+            if rst:
+                result[state] = rst.group(1)
+                state = None
+            rst1 = re_date1.search(line)
+            if rst1:
+                result[state] = rst1.group(1)
+                state = None
+        return result
+
+    def parse_datetime(self, date_str):
+        """将字符转化为日期
+        """
+        if not isinstance(date_str, str):
+            return
+        date_str = date_str.strip()
+        fmts = ['%Y-%m-%d', '%Y/%m/%d', '%Y年%m月%d日', '%Y%m%d']
+        for fmt in fmts:
+            try:
+                print(1085)
+                return datetime.strptime(date_str, fmt).date().isoformat()
+            except ValueError:
+            # except:
+                print(1089)
+                continue
+        else:
+            print(f'未能将{date_str}解析为日期')
+            raise errors.RpaError(error=errors.E_PROC,message=f'未能将{date_str}解析为日期')
+
+    def set_effect_date(self,date_dict):
+        """设值交强险、商业险起保日期
+        """
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceInsuranceCIInfoChecked"]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        time.sleep(0.2)
+        logger.info(f'设置交强险、商业险起保日期：{date_dict}')
+        if data.get('交强险'):
+            start_datetime = data['start_date']
+            elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceInsuranceCIInfoStartDate"]')
+            self.driver.execute_script('arguments[0].value="{}";'.format(start_datetime), elem)
+            elem.click()
+            elem.send_keys(Keys.ENTER)
+            time.sleep(0.5)
+        if data.get('商业险'):
+            start_datetime = data['start_date']
+            elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceInsuranceBIInfoStartDate"]')
+            self.driver.execute_script('arguments[0].value="{}";'.format(start_datetime), elem)
+            elem.click()
+            elem.send_keys(Keys.ENTER)
+            time.sleep(0.5)
+
+    def ensure_effect_date_and_calculate(self,data):
+        """确定并修改起保日期，计算保费
+        """
+        # 指令支持交商一致的，如今日脱保，但是客户想一周后的周一生效，可以指令指定
+        if data.get('起保日期'):
+            date_dict = {}
+            commerce_date = self.parse_datetime(str(data.get('起保日期')))
+            date_dict['商业险'] = commerce_date
+            date_dict['交强险'] = commerce_date
+            self.set_effect_date(date_dict=date_dict)
+
+        success_msg_list,err_or_warning_msg_list = self.get_calculate_dlg_msg()
+        if err_or_warning_msg_list:
+            # 识别成{'交强险': '2021-04-22', '商业险': '20210606'}
+            dates = self.analysis_insurance_effect_date('\n'.join(err_or_warning_msg_list)) # 列表项转化为一行一行的文本
+            # max_date = date.today() + timedelta(days=MAX_DAY_INTERVAL)
+            tommorow = date.today() + timedelta(days=1)
+            dates = {
+                # k: v if date.fromisoformat(v) > tommorow else tommorow.isoformat() for (k, v) in dates.items() if date.fromisoformat(v) < max_date
+                k: v if date.fromisoformat(v) > tommorow else tommorow.isoformat() for (k, v) in dates.items()
+            }
+            date_dict = {}
+            commerce_date = dates.get('商业险')
+            if commerce_date:
+                commerce_date = self.parse_datetime(str(commerce_date))
+                date_dict['商业险'] = commerce_date
+                logger.info('设置商业险起保日期：%s', commerce_date)
+            compul_date = dates.get('交强险', None)
+            if compul_date:
+                compul_date = self.parse_datetime(str(compul_date))
+                date_dict['交强险'] = compul_date
+                logger.info('设置交强险起保日期：%s', compul_date)
+            self.set_effect_date(date_dict=date_dict)
+
+        if success_msg_list:
+            prompt = '\n'.join(success_msg_list)
+            print(1156)
+            logger.info(prompt)
+
+        # 增加特约上传影像
+        self.appoint_and_image(data)
+
+        # 新增信息后需要再次保费试算得到提示信息
+        success_msg_list, err_or_warning_msg_list = self.get_calculate_dlg_msg()
+        prompt = '\n'.join(err_or_warning_msg_list)
+        if ('出错' or '重复投保') in prompt:
+            raise errors.RpaError(error=errors.E_PROC, message=prompt)
+        prompt = '\n'.join(success_msg_list)
+        if ('暂存成功' or '计算成功') in prompt:
+            logger.info(prompt)
+        return True
+
+
+    def appoint_and_image(self, data):
+        """特别约定和影响信息
+        """
+        # 添加特约++++++++++++++++++++++++++++++++++++++
+        elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceInsuredInfoRiskGrade"]')
+        self.driver.execute_script("arguments[0].click()", elem)
+        elem = self.driverwait.until_find_element(By.XPATH, '//*[text()="《 商业特别约定 》"]')
+        elem.click()
+        time.sleep(2)
+        elem = self.driver.find_element(By.XPATH, '//input[@placeholder="请输入【特约编码】或【部分特约内容】以快速检索"]')
+        elem.send_keys('05150326')
+        # 查询
+        elem = self.driver.find_element(By.XPATH, '//*[@class="el-button fontLeft Sybackground el-button--primary"]')
+        elem.click()
+        time.sleep(0.5)
+        elem = self.driver.find_element(By.XPATH, '//*[text()="05150326---"]/../../../td[1]/descendant::input/..')
+        elem.click()
+        elem = self.driver.find_element(By.XPATH, '//*[@class="especiallySearch"]/ancestor::div[@class="el-dialog"]/div[@class="el-dialog__footer"]/div/button')
+        elem.click()
+        time.sleep(1)
+
+        # 上传影像++++++++++++++++++++++++++++++++++++++
+
+
+        files = data['files']
+        for index, f in enumerate(files):
+            elem = self.driver.find_element(By.XPATH,'//*[text()="验车照片 ( 若需要上传验车照，请将当天验车码和车辆一同拍照上传 )"]/ancestor::div[@class="imageInfo"]/div[3]/descendant::div[@class="el-upload el-upload--picture-card"]')
+            self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+            time.sleep(0.5)
+            file_path = f['path']
+            elem = self.driverwait.until_find_element(By.XPATH, '//*[text()="验车照片 ( 若需要上传验车照，请将当天验车码和车辆一同拍照上传 )"]/ancestor::div[@class="imageInfo"]/div[3]/descendant::div[@class="el-upload el-upload--picture-card"]')
+            elem.click()
+            time.sleep(2)
+            # 鼠标光标默认在文件路径输入框，直接输入，回车就好了
+            keyboard.write(file_path.strip())
+            print(file_path.strip())
+            keyboard.send('enter')
+            print(1204)
+            time.sleep(1)
+        elem = self.driver.find_element(By.XPATH,'//*[text()="验车照片 ( 若需要上传验车照，请将当天验车码和车辆一同拍照上传 )"]/ancestor::div[@class="imageInfo"]/div[3]/descendant::div[@class="el-upload el-upload--picture-card"]')
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+        time.sleep(0.5)
+        elem = self.driver.find_element(By.XPATH, '//button[./span[text()="全部上传"]]')
+        elem.click()
+        while True:
+            msg = self.handle_success_dlg(timeout=40)
+            if '上传成功' in msg:
+                logger.info(msg)
+                print(1216)
+                break
+            else:
+                print('怎么没有上传成功呢？？？')
+
+    def submit(self,data):
+        elem = self.driver.find_element(By.XPATH, '//*[@id="submitInsure"]')
+        elem.click()
+        time.sleep(5)
+        elem = self.driverwait.until_find_element(By.XPATH, '//*[@class="accountBoxJQ"]/..')
+        all_text = elem.text
+        print(elem.text)
+        pay_content_path = self.screenshot_mgr.new_screenshot_name()
+        elem.screenshot(pay_content_path)
+        logger.info('payment qrcode path is: %s', pay_content_path)
+
+        # elem = self.driverwait.until_find_element(By.XPATH, '//*[@class="accountBoxJQ"]')
+        # print(elem.text)
+        # elem = self.driverwait.until_find_element(By.XPATH, '//*[@class="accountBoxSY"]')
+        # print(elem.text)
+
+        re_commerce_result = re.compile('商业险核保结果:(.*?)\n')
+        # re_commerce_cause = re.compile('商业险未通过原因(.*?)\n')
+        re_commerce_cause = re.compile('商业险未通过原因(.*)') # 最后一条消息没有换行符，直接匹配所有就好了
+        re_commerce_num = re.compile('商业险投保单号: (.*?)\n')
+
+        re_compul_cause = re.compile('交强险未通过原因(.*?)\n')
+        re_compul_result = re.compile('交强险核保结果:(.*?)\n')
+        re_compul_num = re.compile('交强险投保单号: (.*?)\n')
+        # commerce_text = '商业险'
+        # compul_text = '交强险'
+        err_msg = ''
+        success_msg = ''
+
+        commerce_num = re_commerce_num.search(all_text).group(1).strip()
+        compul_num = re_compul_num.search(all_text).group(1).strip()
+        # 商业险结果
+        commerce_result = re_commerce_result.search(all_text)
+        if commerce_result:
+            commerce_result = commerce_result.group(1)
+        # 交强险结果
+        compul_result = re_compul_result.search(all_text)
+        if compul_result:
+            compul_result = compul_result.group(1)
+
+        if '自核通过' not in commerce_result:
+            print(11)
+            commerce_cause = re_commerce_cause.search(all_text)
+            if commerce_cause:
+                commerce_cause = commerce_cause.group(1)
+                err_msg = err_msg + f'商业险{commerce_num}核保结果:{commerce_result},未通过原因{commerce_cause}。'
+                print(1253,err_msg)
+        else:
+            success_msg = success_msg + f'商业险{commerce_num}核保结果:{commerce_result}。'
+        if '自核通过' not in compul_result:
+            print(222)
+            compul_cause = re_compul_cause.search(all_text)
+            if compul_cause:
+                compul_cause = compul_cause.group(1)
+                err_msg = err_msg + f'交强险{compul_num}核保结果:{compul_result},未通过原因{compul_cause}。'
+                print(1261,err_msg)
+        else:
+            success_msg = success_msg + f'交强险{compul_num}核保结果:{compul_result}。'
+        print(111, err_msg)
+        print(111, success_msg)
+        if err_msg:
+            err_msg = f'客户{data.get("车主姓名")}的' +success_msg + err_msg
+            print(219, err_msg)
+
+            elem_close = self.driver.find_element(By.XPATH, '//div[@aria-label="提交核保"]/div/button')
+            self.driver.execute_script("arguments[0].click()", elem_close)
+            time.sleep(0.5)
+
+
+            # 开始下载预览保单
+            elem = self.driver.find_element(By.XPATH, '//span[contains(string(),"附加精神损害抚慰金责任险（车上人员责任保险（乘客））")]')
+            self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+            time.sleep(0.2)
+            elem = self.driver.find_element(By.XPATH, '//*[@id="quotation"]')
+            elem.click()
+            elem = self.driverwait.until_find_element(By.XPATH, '//li[text()="下载"]')
+            time.sleep(0.5)
+            # WebDriverWait(self.driver, timeout=2).until(EC.element_to_be_clickable(elem))
+            try:
+                print(1291)
+                elem.click()
+            except:
+                print(1294)
+                self.driver.execute_script("arguments[0].click()", elem)
+
+
+            # raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CAR_INFO_RECOGNIZE)
+            raise errors.RpaError(error=errors.E_PROC, message=err_msg)
+        if ('自核通过' in commerce_result) and ('自核通过' in compul_result):
+            elem = self.driverwait.until_find_element(By.XPATH, '//*[@class="accountBoxJQ"]/..')
+            pay_content_path = self.screenshot_mgr.new_screenshot_name()
+            elem.screenshot(pay_content_path)
+            logger.info('payment qrcode path is: %s', pay_content_path)
+            # return pay_content_path,commerce_num
+            elem_close = self.driver.find_element(By.XPATH, '//div[@aria-label="提交核保"]/div/button')
+            self.driver.execute_script("arguments[0].click()", elem_close)
+            WebDriverWait(self.driver, timeout=2).until(EC.staleness_of(elem))
+
+            # 开始下载预览保单
+            elem = self.driver.find_element(By.XPATH, '//span[text()="非车险"]')
+            self.driver.execute_script("arguments[0].scrollIntoView();", elem)
+            time.sleep(0.2)
+            elem = self.driver.find_element(By.XPATH, '//*[@id="quotation"]')
+            elem.click()
+            elem = self.driverwait.until_find_element(By.XPATH, '//li[text()="下载"]')
+            WebDriverWait(self.driver, timeout=2).until(EC.element_to_be_clickable(elem))
+            try:
+                elem.click()
+            except:
+                self.driver.execute_script("arguments[0].click()", elem)
+
+
+
+
+
+
 
     def handle_success_dlg(self, timeout=2):
         dlg_success = dialog.SuccessMsgDlg(self.driver)
@@ -1032,9 +1357,6 @@ class DajiabaoWeb:
         else:
             logger.info('not found warning dialog.')
 
-
-
-
 if __name__ == "__main__":
     # apply_insurance_ticket
     logging.basicConfig(
@@ -1045,6 +1367,33 @@ if __name__ == "__main__":
     w = DajiabaoWeb(web_screenshot_mgr)
     w.open()
     w.login()
+
+    data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11','起保日期':'2021-04-24',
+             'files': [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'}, {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},],
+             'plan':{'车损':'1000',
+                     '三者':'50',
+                     '司机':'5000',
+                     '乘客':'5000',
+                     '道路救援':'5',
+                     '代为驾驶':'2',
+                     '折扣系数':'1.35'}
+             }
+    w.goto_category_page()
+    w.fill_header_info(data)
+    w.fill_car_owner_info(data)
+    w.fill_car_info(data)
+    w.vehicle_tax(data)
+    w.fill_insurance_plan(data)
+    w.policy_holder(data)
+    w.ensure_effect_date_and_calculate(data)
+    # w.appoint_and_image(data)
+    w.submit(data)
+    # w.fill_person_car_info(data)
+    # w.add_person_msg(data)
+    # w.fill_insurance_plan(data)
+    # w.apply_payment(vin=data['options']['车架号'], payway_name='xx')
+    w.close()
+
     # data = {'options': {'车架号': 'LRW3E7FA2LC146763', '发动机号': 'TG1203330046NM', '厂牌型号': 'TSL7000BEVAR1',
     #                     '姓名': '王皎莹', '身份证号': '320504197711303526', '住址': ' 上海市长宁区延安西路900号', '性别': '男', '车主类型': '个人',
     #                     'mobile': '18621998758', '手机': '18621998758',
@@ -1061,29 +1410,6 @@ if __name__ == "__main__":
     #             '乘客': '20000',
     #         },
     #         }
-    data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11',
-             'plan':{'车损':'1000',
-                     '三者':'50',
-                     '司机':'5000',
-                     '乘客':'5000',
-                     '道路救援':'5',
-                     '代为驾驶':'2',
-                     '折扣系数':'1.35'}
-             }
-    w.goto_category_page()
-    w.fill_header_info(data)
-    w.fill_car_owner_info(data)
-    w.fill_car_info(data)
-    w.vehicle_tax(data)
-    w.fill_insurance_plan(data)
-    w.policy_holder(data)
-    # w.fill_person_car_info(data)
-    # w.add_person_msg(data)
-    # w.fill_insurance_plan(data)
-    # w.apply_payment(vin=data['options']['车架号'], payway_name='xx')
-    w.close()
-
-
 
     # w.goto_car_info(agent='吴征')
     # data = {'chat': 'allen、慧慧、录单助手', 'sender': 'allen', 'task_id': 1, 'task_hash': 'be2d242', 'task_type': 'order', 'num_pdf': 1, 'num_pic': 1, 'mobile': '13801652382', '手机': '13801652382', '邮箱': 'zhang_xuelin@126.com', 'email': 'zhang_xuelin@126.com', 'plan': '基本款', '生效': '2020-10-03 00:00', 'start_date': '2020-10-03 00:00', '经办人': '陈佳燕', 'agent': '陈佳燕', 'options': {'车架号': 'LRW3E7EA6LC078016', '发动机号': 'TG1201270005HC', '厂牌型号': 'TSL7000BEVAR0', '姓名': '张学林', '身份证号': '522101197808245615', '住址': ' 上海市长宁区延安西路900号', '性别': '男', '车主类型': '个人', 'mobile': '13801652382', '手机': '13801652382', '邮箱': 'zhang_xuelin@126.com', 'email': 'zhang_xuelin@126.com', 'plan': '基本款', '生效': '2020-10-03 00:00', 'start_date': '2020-10-03 00:00', '经办人': '陈佳燕', 'agent': '陈佳燕'}, '姓名': '张学林', '身份证号': '522101197808245615', '住址': '上海市长宁区延安西路900号', '性别': '男', '车主类型': '个人', 'certno': 'YX475LC00078016', 'certdate': '2020年09月02日', 'name': '特斯拉牌纯电动轿车', 'model': 'TSL7000BEVAR0', 'vin': 'LRW3E7EA6LC078016', 'engineno': 'TG1201270005HC', 'color': '灰', 'seats': '5'}

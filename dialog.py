@@ -82,7 +82,7 @@ class ErrorMsgDlg:
         self.driver = driver
         self.root = None
 
-    def exists(self, timeout=3.0):
+    def exists(self, timeout=2.0):
         self.driverwait = webdriverhelper.WebDriverHelper(self.driver, timeout)
         if self.root:
             return True
