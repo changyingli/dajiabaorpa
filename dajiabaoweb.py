@@ -168,7 +168,7 @@ class DajiabaoWeb:
         # self.driver.maximize_window()
         # time.sleep(1)  # sometimes driver connection refused. try sleep
 
-    def login(self):
+    def login(self, organization):
         elem = self.driver.find_element_by_id('username')
         elem.clear()
         elem.send_keys(self.username)
@@ -225,28 +225,32 @@ class DajiabaoWeb:
                 self.driver.find_element_by_id('loginBtn').click()
                 try:
                     elem =  self.driverwait.until_find_element(By.ID, 'loginCompleteCode')
+
+                    # 选择机构
+                    # elem = self.driver.find_element_by_id('loginCompleteCode')
+                    elem.send_keys(organization)
+                    # li式的下拉选择框，先输入关键词，然后等待对应的li元素加载出来后再点击
+                    elem = self.driverwait.until_find_element(By.XPATH, '//span[contains(text(),"05--浙江分公司")]')
+                    self.driver.execute_script("arguments[0].click()", elem)
+                    time.sleep(2)
+                    # 首页
+                    elem = self.driver.find_element_by_xpath('//li[@class="el-menu-item is-active submenu-title-noDropdown"]')
+                    elem.click()
                     break
                 except:
                     pass
         else:
             logger.error('Wrong captcha result when logging.')
 
-    def goto_category_page(self, organization='05--浙江分公司',category='车险投保'):
+    def goto_category_page(self, category):
         """进入车险投保、保单查询界面
         """
-        if organization:
-            # 选择机构
-            elem = self.driver.find_element_by_id('loginCompleteCode')
-            elem.send_keys(organization)
-            # li式的下拉选择框，先输入关键词，然后等待对应的li元素加载出来后再点击
-            elem = self.driverwait.until_find_element(By.XPATH, '//span[contains(text(),"05--浙江分公司")]')
-            self.driver.execute_script("arguments[0].click()",elem)
-            time.sleep(2)
         # 首页
         elem = self.driver.find_element_by_xpath('//li[@class="el-menu-item is-active submenu-title-noDropdown"]')
         elem.click()
         # 车险投保、保单查询
-        elem = self.driver.find_element_by_xpath(f'//span[../div][contains(text(),"{category}")]')
+        # elem = self.driver.find_element_by_xpath(f'//span[../div][contains(text(),"{category}")]')
+        elem = self.driverwait.until_find_element(By.XPATH,f'//span[../div][contains(text(),"{category}")]')
         elem.click()
         # 等待元素消失
         WebDriverWait(self.driver, 3).until(EC.invisibility_of_element(elem))
@@ -1162,7 +1166,7 @@ class DajiabaoWeb:
         """
         # 添加特约++++++++++++++++++++++++++++++++++++++
         elem = self.driver.find_element(By.XPATH, '//*[@id="insuranceInsuredInfoRiskGrade"]')
-        self.driver.execute_script("arguments[0].click()", elem)
+        self.driver.execute_script("arguments[0].scrollIntoView();", elem)
         elem = self.driverwait.until_find_element(By.XPATH, '//*[text()="《 商业特别约定 》"]')
         elem.click()
         time.sleep(2)
@@ -1279,7 +1283,7 @@ class DajiabaoWeb:
             time.sleep(0.5)
 
 
-            # 开始下载预览保单
+            # TODO 开始下载预览保单,暂时在这里测试，真正步骤要放在下面
             elem = self.driver.find_element(By.XPATH, '//span[contains(string(),"附加精神损害抚慰金责任险（车上人员责任保险（乘客））")]')
             self.driver.execute_script("arguments[0].scrollIntoView();", elem)
             time.sleep(0.2)
@@ -1296,6 +1300,7 @@ class DajiabaoWeb:
                 self.driver.execute_script("arguments[0].click()", elem)
 
 
+
             # raise errors.RpaError(error=errors.E_PROC, message=strings.ERR_CAR_INFO_RECOGNIZE)
             raise errors.RpaError(error=errors.E_PROC, message=err_msg)
         if ('自核通过' in commerce_result) and ('自核通过' in compul_result):
@@ -1303,13 +1308,14 @@ class DajiabaoWeb:
             pay_content_path = self.screenshot_mgr.new_screenshot_name()
             elem.screenshot(pay_content_path)
             logger.info('payment qrcode path is: %s', pay_content_path)
-            # return pay_content_path,commerce_num
+
+            # 关闭核保成功界面
             elem_close = self.driver.find_element(By.XPATH, '//div[@aria-label="提交核保"]/div/button')
             self.driver.execute_script("arguments[0].click()", elem_close)
             WebDriverWait(self.driver, timeout=2).until(EC.staleness_of(elem))
 
             # 开始下载预览保单
-            elem = self.driver.find_element(By.XPATH, '//span[text()="非车险"]')
+            elem = self.driver.find_element(By.XPATH, '//span[contains(string(),"附加精神损害抚慰金责任险（车上人员责任保险（乘客））")]')
             self.driver.execute_script("arguments[0].scrollIntoView();", elem)
             time.sleep(0.2)
             elem = self.driver.find_element(By.XPATH, '//*[@id="quotation"]')
@@ -1321,6 +1327,9 @@ class DajiabaoWeb:
             except:
                 self.driver.execute_script("arguments[0].click()", elem)
 
+            qutation_path='' # TODO 需要返回电子保单
+
+        return commerce_num,pay_content_path,qutation_path
 
 
 
@@ -1356,6 +1365,143 @@ class DajiabaoWeb:
             return warning_msg
         else:
             logger.info('not found warning dialog.')
+
+    @entry_wrap
+    def apply_insurance_ticket(self, task):
+        """录单主入口
+        """
+        def populate_insurance_data(data) -> dict:
+            """根据基础款和自定义的附加内容，加以修改得到最后的plan，塞入data即task中
+            """
+            if not ('owner_type' in data):
+                data['owner_type'] = 'person'
+
+            plan = PLANS[data['plan']].copy()
+
+            # 'plan_custom': {'三者': '1500000', '+划痕': '5000', '-意外': True}  # 不要意外，加划痕，修改三者
+            custom = data.get('plan_custom')
+            if custom:
+                for option in custom:
+                    if option.startswith('-'):
+                        key = option[1:]
+                        if key in plan:
+                            del plan[key]
+                        else:
+                            logger.warn(
+                                'try to remove plan option %s which does not exit', key)
+                    elif option.startswith('+'):
+                        plan[option[1:]] = custom[option]
+                    else:
+                        plan[option] = custom[option]
+
+            data['plan'] = plan
+            return data
+
+        logger.info('apply insurance ticket: %s', task)
+        # populate：填充  根据基础款去拿到参数，放入task
+        task = populate_insurance_data(task)
+        logger.info('after populate data: %s', task)
+
+        self.open()
+        self.login(organization='05--浙江分公司')
+        self.goto_category_page(category='车险投保')
+        owner_type = task['owner_type']
+        if owner_type == 'person':
+            self.fill_header_info(task)
+            self.fill_car_owner_info(task)
+            self.fill_car_info(task)
+            self.vehicle_tax(task)
+            self.fill_insurance_plan(task)
+            self.policy_holder(task)
+            self.ensure_effect_date_and_calculate(task)
+            quotation_id,qrcode,quotation_preview = self.submit(task)
+        # elif owner_type == 'enterprise':
+        #     pass
+        else:
+            raise errors.RpaError(
+                error=errors.E_UNKOWN, message=strings.err_unknown)
+
+        task['quotation_id'] = quotation_id
+        task['quotation_preview'] = quotation_preview
+        task['qrcode'] = qrcode
+        print(930, 'apply_insurance_ticket:', task)
+        return task
+
+    @entry_wrap
+    def get_insurance_files(self, quotation_ids: list) -> dict:
+        """TODO 保单下载 未修改
+        """
+        pass
+        # logger.info('start getting insurance pdf files for %s', quotation_ids)
+        # dl_dir = tempfile.mkdtemp()
+        # logger.info('download path is %s', dl_dir)
+        # self.open(download_dir=dl_dir)
+        # self.login()
+        #
+        # self.goto_car_info(None)
+        # effect_tickets = {}
+        # cnt_dl = 0
+        # for quotation_id in quotation_ids:
+        #     tickets = self.query_quotation_status(quotation_id)
+        #     effect = False
+        #     if tickets:
+        #         state = tickets[0]['quotationState']
+        #         logger.info('quotation: %s state: %s', quotation_id, state)
+        #         if state == '生效':
+        #             effect = True
+        #
+        #     if not effect:
+        #         continue
+        #     else:
+        #         cbs = self.driver.find_elements(
+        #             By.XPATH, "//table[@id='resultTable']//input[@name='quotationCheckBox']")
+        #         for cb in cbs:
+        #             cb.click()
+        #         self.driver.find_element(By.CSS_SELECTOR, '#dzbdxz').click()
+        #         time.sleep(2)
+        #         cnt_dl += 1
+        #         effect_tickets.update({t['policyNo']: t for t in tickets})
+        # now = time.time()
+        # download_timeout = now + self.DOWNLOAD_WAIT_TIME
+        # done_zips = set()
+        # quot_pdfs = {}
+        # while now < download_timeout:
+        #     zipfiles = [p for p in Path(dl_dir).glob(
+        #         '*.zip') if p not in done_zips]
+        #     logger.info('zip files: %s', zipfiles)
+        #     for zfile in zipfiles:
+        #         extract_dir = Path(tempfile.mkdtemp()).resolve()
+        #         with ZipFile(zfile) as zf:
+        #             zf.extractall(extract_dir)
+        #         newpaths = []
+        #         quot_id = None
+        #         for pdf in Path(extract_dir).glob('*/*.pdf'):
+        #             logger.info('Downloaded pdf: %s', pdf)
+        #             # stem = pdf.stem
+        #             # 之前文件名可能是 保单号：ASHH451Y2021B005048L.pdf，现在变化成 保单号+号牌号码 ：ASHH451Y2021B005048L_LS004151.pdf了
+        #             stem = pdf.stem.split('_')[0]
+        #             ticket = effect_tickets[stem]
+        #             quot_id = ticket['quotationNo']
+        #             # product_type = '交强险保单' if ticket['productType'] == '交强险' else '商业险保单'
+        #             product_type = ticket['productType'] + '保单'
+        #             newname = ticket['insurant'] + product_type + '.pdf'
+        #             logger.info('pdf name to change: %s', newname)
+        #             newpath = pdf.rename(Path(pdf.parent, newname))
+        #             newpaths.append(newpath)
+        #         if quot_id:
+        #             quot_pdfs[quot_id] = newpaths
+        #         logger.info('handled zip file: %s', zfile)
+        #         done_zips.add(zfile)
+        #     if cnt_dl == len(done_zips):
+        #         logger.info('downloaded pdfs: %s', quot_pdfs)
+        #         return quot_pdfs
+        #     else:
+        #         time.sleep(5)
+        #         now = time.time()
+        # else:
+        #     logger.error('Timeout when downloading insurance pdfs.')
+        #     raise errors.RpaError(error=errors.E_NETWORK,
+        #                           message=strings.ERR_INSURANCE_DOWNLOAD)
 
 if __name__ == "__main__":
     # apply_insurance_ticket

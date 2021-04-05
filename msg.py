@@ -14,18 +14,20 @@ err_recognize = '未能识别材料内容。请人工处理。'
 err_network = '后台识别服务请求失败，请重试或人工处理。'
 err_unknown = '遇到未知错误，请重试或人工处理。'
 ERR_UNKNOWN = '遇到未知错误，请重试或人工处理。'
+ERR_SAVE_FILE = '保存材料遇到未知错误，请重试或人工处理。'
 err_no_mobile = '录单时请输入手机号。'
 err_no_seat = '录单时请输入座位数，如： 5座。'
 err_no_email = '录单时请输入邮箱。'
 err_no_insurance_plan = '录单时请输入[基本款|优质款|尊享款]。'
-ERR_NO_DATE='没有输入时间。请输入"生效:即时|明天|后天"或"生效:周一|周二|...|周日"或"生效:2020-01-01"格式的时间。'
+ERR_NO_DATE='没有输入时间。请输入"生效:2020-01-01"格式的时间。'
 
 ERR_WRONG_IDENT = '图片未能正确识别为身份证或发票。请人工处理。'
 ERR_WRONG_VEH_FILE = '未能识别PDF文件。请检查PDF是否为车辆合格证或购车发票。'
 ERR_WRONG_VEH_PIC = '未能识别PIC，可能是车辆合格证或者发票识别错误。'
 ERR_INSURANCE_DOWNLOAD = '未能下载电子保单，请人工处理。'
 ERR_MAKE_QRCODE ='未能创建支付二维码，请人工处理。'
-ERR_FILE_COUNT = '收到{num_pic}张图片和{num_pdf}张PDF文件。录单需要一张车辆合格证(PDF/PIC)或发票(PDF/PIC)和一张身份证图片，企业单还需要一张营业执照相片。请重新输入。'
+# ERR_FILE_COUNT = '收到{num_pic}张图片和{num_pdf}张PDF文件。录单需要一张车辆合格证(PDF/PIC)或发票(PDF/PIC)和一张身份证图片，企业单还需要一张营业执照相片。请重新输入。'
+ERR_FILE_COUNT = '收到{num_pic}张图片和{num_pdf}张PDF文件。录单需要一张车辆行驶证PIC和一张身份证图片。请重新输入。'
 
 # 大家保话术
 ERR_CITY_MATCH = "没有找到对应的 市"
