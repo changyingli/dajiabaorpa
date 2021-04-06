@@ -226,16 +226,25 @@ class FTSMsgSearchWnd:
 
 
 class WeChat:
-    def __init__(self):
+    def __init__(self, process=None):
         self.app = None
         self.__win_main = None
         self.__msg_edit = None
         self.current_chat_name = None
         self.filemgr = WeChatFilePath('log/wechat_files/')
+        self._start(process=process)
 
-    def start(self):
+    def _start(self, process=None):
         self.filemgr.mkdir()
-        self.app = Application(backend="uia").start(r'C:\Program Files (x86)\Tencent\WeChat\WeChat.exe')
+        if process:
+            self.app = Application(backend='uia').connect(process=process)
+        else:
+            self.app = Application(backend="uia").start(
+                r'C:\Program Files (x86)\Tencent\WeChat\WeChat.exe')
+
+    # def start(self):
+    #     self.filemgr.mkdir()
+    #     self.app = Application(backend="uia").start(r'C:\Program Files (x86)\Tencent\WeChat\WeChat.exe')
 
     def quit(self):
         self.app.kill()
@@ -328,6 +337,9 @@ class WeChat:
     def chat_scroll_top(self):
         prev_chat = None
         while True:
+            chats = self.chat_list.items()
+            if not chats:
+                return
             curr_chat = self.chat_list.items()[0]
             if prev_chat == curr_chat:
                 break
@@ -385,6 +397,7 @@ class WeChat:
                     self.del_chat(chat.window_text())
                     continue
 
+                time.sleep(1)
                 chat.click_input()
                 try:
                     # 如果出现放大的个人聊天窗口，关闭

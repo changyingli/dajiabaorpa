@@ -34,7 +34,7 @@ import webdriverhelper
 import msg as strings
 import errors
 from file import ScreenShotMgr
-from settings import PLANS, AGENTS
+from settings import PLANS
 
 
 
@@ -230,7 +230,8 @@ class DajiabaoWeb:
                     # elem = self.driver.find_element_by_id('loginCompleteCode')
                     elem.send_keys(organization)
                     # li式的下拉选择框，先输入关键词，然后等待对应的li元素加载出来后再点击
-                    elem = self.driverwait.until_find_element(By.XPATH, '//span[contains(text(),"05--浙江分公司")]')
+                    # elem = self.driverwait.until_find_element(By.XPATH, '//span[contains(text(),"05--浙江分公司")]')
+                    elem = self.driverwait.until_find_element(By.XPATH, f'//span[contains(text(),"{organization}")]')
                     self.driver.execute_script("arguments[0].click()", elem)
                     time.sleep(2)
                     # 首页
@@ -260,8 +261,12 @@ class DajiabaoWeb:
         """
         # organization_code = data['organization_code']
         # agent_code = data['agent_code']
-        organization_code = '05700205'
-        agent_code = '105002267'
+        # # 浙江
+        # organization_code = '05700205'
+        # agent_code = '105002267'
+        # 上海
+        organization_code = '03000063'
+        agent_code = '103005701'
         # 点击承保机构
         elem = self.driver.find_element_by_xpath("//span[../div/descendant::input[@id='insuranceChannelInfoUnderwritingAgency']]")
         self.driver.execute_script("arguments[0].click()", elem)
@@ -696,7 +701,7 @@ class DajiabaoWeb:
         # 使用性质++++++++++++++++++++++++++++++++++++++
         nature_of_use = '家庭自用客车'
         if data.get('使用性质'):
-            nature_of_use = settings.NATURE_OF_USE[data.get('使用性质')]
+            nature_of_use = settings.NATURE_OF_USE[data.get('使用性质').upper()]
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoNatureOfUsage"]')
         self.driver.execute_script("arguments[0].click()", elem)
 
@@ -741,8 +746,8 @@ class DajiabaoWeb:
 
         # 能源类型++++++++++++++++++++++++++++++++++++++
         energy_type = '燃油'
-        if data.get('燃料'):
-            fule_type = data.get('燃料')
+        if data.get('燃料种类'):
+            fule_type = data.get('燃料种类')
         # 使用性质
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarInfoEnergyType"]')
         self.driver.execute_script("arguments[0].click()", elem)
@@ -781,8 +786,8 @@ class DajiabaoWeb:
         elem.send_keys(data['身份证号'])
         # 燃料种类
         fule_type = '汽油'
-        if data.get('燃料'):
-            fule_type = data.get('燃料')
+        if data.get('燃料种类'):
+            fule_type = data.get('燃料种类')
         elem = self.driver.find_element_by_xpath('//input[@id="insuranceCarboatFuelType"]')
         self.driver.execute_script("arguments[0].click()", elem)
 
@@ -1112,9 +1117,9 @@ class DajiabaoWeb:
         """确定并修改起保日期，计算保费
         """
         # 指令支持交商一致的，如今日脱保，但是客户想一周后的周一生效，可以指令指定
-        if data.get('起保日期'):
+        if data.get('生效日期'):
             date_dict = {}
-            commerce_date = self.parse_datetime(str(data.get('起保日期')))
+            commerce_date = self.parse_datetime(str(data.get('生效日期')))
             date_dict['商业险'] = commerce_date
             date_dict['交强险'] = commerce_date
             self.set_effect_date(date_dict=date_dict)
@@ -1331,8 +1336,38 @@ class DajiabaoWeb:
 
         return commerce_num,pay_content_path,qutation_path
 
+    def query_quotation_status(self, quotation_id) -> list:
+        # self.driver.find_element(
+        #     By.XPATH, './/img[@data="quotation_search"]').click()
+        self.driver.get('https://xkscd.djbx.com:9080/pc_vir/underwriting/renwPreminm')
+        time.sleep(1)
+        WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((By.XPATH, '//label[text()="保单号："]/../descendant::input'))).click()
+        self.driver.find_element(By.XPATH, '//label[text()="保单号："]/../descendant::input').send_keys(quotation_id)
+        self.driver.find_element(By.XPATH, '//span[text()="查询"]/..').click()
+        time.sleep(2)
 
 
+        # head_tr1和head_tr2 网页看上去是一样的，但是head_tr2只能获取到th.text='操作'，head_tr1中可以获取到其他的表头，莫名其妙？？？？
+        head_tr1 = self.driverwait.until_find_element(By.XPATH,
+                                                      "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__header-wrapper']]")
+        head_th_list1 = head_tr1.find_elements_by_tag_name('th')
+        for th in head_th_list1:
+            print(th.text)
+            if '上市年月' in th.text:
+                time_index = head_th_list1.index(th)
+            elif '新车购置价' in th.text:
+                price_index = head_th_list1.index(th)
+        head_tr2 = self.driverwait.until_find_element(By.XPATH,
+                                                      "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__fixed-right']]")
+        head_th_list = head_tr2.find_elements_by_tag_name('th')
+
+        trlist = self.driver.find_elements(
+            By.CSS_SELECTOR, '#resultTable > tbody > tr')
+        if not trlist:
+            raise errors.RpaError(error=errors.E_PROC,
+                                  message='没有查到报价单号：{}'.format(quotation_id))
+        status = [json.loads(tr.get_attribute('data')) for tr in trlist]
+        return status
 
 
 
@@ -1370,6 +1405,15 @@ class DajiabaoWeb:
     def apply_insurance_ticket(self, task):
         """录单主入口
         """
+#         test_dic = {'姓名':'朱晓明','quotation_id': '123456789', 'quotation_preview': 'C:\\Users\\13154\\Desktop\\发票\\80.pdf', 'qrcode': 'C:\\Users\\13154\\Desktop\\荷包成功.png','订单号':'987654321',
+#             'chat': '小小', 'sender': '小小', 'task_id': 1, 'task_hash': '6d272e0', 'task_type': 'order', 'num_pdf': 0, 'num_pic': 2,
+# 'mobile': '15518507955', '手机': '15518507955', '邮箱': '132@qq.com', 'email': '132@qq.com',  '使用性质': 'A1', '燃料种类': '柴油', 'owner_type': 'person',
+# 'plan': {'三者': '100', '车损': '10000', '司机': '10000', '乘客': '5000', '道路救援': '2', '代为驾驶': '1', '折扣系数': '1.35'},
+# 'files': [{'type': 'pic', 'path': 'o.jpg'}, {'type': 'pic', 'path': 'qp.jpg'}],
+# }
+#
+#         return test_dic
+
         def populate_insurance_data(data) -> dict:
             """根据基础款和自定义的附加内容，加以修改得到最后的plan，塞入data即task中
             """
@@ -1393,14 +1437,15 @@ class DajiabaoWeb:
                         plan[option[1:]] = custom[option]
                     else:
                         plan[option] = custom[option]
-
+                else:
+                    del data[custom]
             data['plan'] = plan
             return data
 
         logger.info('apply insurance ticket: %s', task)
         # populate：填充  根据基础款去拿到参数，放入task
         task = populate_insurance_data(task)
-        logger.info('after populate data: %s', task)
+        logger.info('apply_insurance_ticket after populate data: %s', task)
 
         self.open()
         self.login(organization='05--浙江分公司')
@@ -1431,46 +1476,45 @@ class DajiabaoWeb:
     def get_insurance_files(self, quotation_ids: list) -> dict:
         """TODO 保单下载 未修改
         """
-        pass
-        # logger.info('start getting insurance pdf files for %s', quotation_ids)
-        # dl_dir = tempfile.mkdtemp()
-        # logger.info('download path is %s', dl_dir)
-        # self.open(download_dir=dl_dir)
-        # self.login()
-        #
-        # self.goto_car_info(None)
-        # effect_tickets = {}
-        # cnt_dl = 0
-        # for quotation_id in quotation_ids:
-        #     tickets = self.query_quotation_status(quotation_id)
-        #     effect = False
-        #     if tickets:
-        #         state = tickets[0]['quotationState']
-        #         logger.info('quotation: %s state: %s', quotation_id, state)
-        #         if state == '生效':
-        #             effect = True
-        #
-        #     if not effect:
-        #         continue
-        #     else:
-        #         cbs = self.driver.find_elements(
-        #             By.XPATH, "//table[@id='resultTable']//input[@name='quotationCheckBox']")
-        #         for cb in cbs:
-        #             cb.click()
-        #         self.driver.find_element(By.CSS_SELECTOR, '#dzbdxz').click()
-        #         time.sleep(2)
-        #         cnt_dl += 1
-        #         effect_tickets.update({t['policyNo']: t for t in tickets})
-        # now = time.time()
-        # download_timeout = now + self.DOWNLOAD_WAIT_TIME
-        # done_zips = set()
-        # quot_pdfs = {}
-        # while now < download_timeout:
-        #     zipfiles = [p for p in Path(dl_dir).glob(
-        #         '*.zip') if p not in done_zips]
-        #     logger.info('zip files: %s', zipfiles)
-        #     for zfile in zipfiles:
-        #         extract_dir = Path(tempfile.mkdtemp()).resolve()
+        logger.info('start getting insurance pdf files for %s', quotation_ids)
+        dl_dir = tempfile.mkdtemp()
+        logger.info('download path is %s', dl_dir)
+        self.open(download_dir=dl_dir)
+        self.login(organization='05--浙江分公司')
+        # self.goto_category_page(category='保单查询')
+
+        effect_tickets = {}
+        cnt_dl = 0
+        for quotation_id in quotation_ids:
+            tickets = self.query_quotation_status(quotation_id)
+            effect = False
+            if tickets:
+                state = tickets[0]['quotationState']
+                logger.info('quotation: %s state: %s', quotation_id, state)
+                if state == '生效':
+                    effect = True
+
+            if not effect:
+                continue
+            else:
+                cbs = self.driver.find_elements(
+                    By.XPATH, "//table[@id='resultTable']//input[@name='quotationCheckBox']")
+                for cb in cbs:
+                    cb.click()
+                self.driver.find_element(By.CSS_SELECTOR, '#dzbdxz').click()
+                time.sleep(2)
+                cnt_dl += 1
+                effect_tickets.update({t['policyNo']: t for t in tickets})
+        now = time.time()
+        download_timeout = now + self.DOWNLOAD_WAIT_TIME
+        done_zips = set()
+        quot_pdfs = {}
+        while now < download_timeout:
+            zipfiles = [p for p in Path(dl_dir).glob(
+                '*.zip') if p not in done_zips]
+            logger.info('zip files: %s', zipfiles)
+            for zfile in zipfiles:
+                extract_dir = Path(tempfile.mkdtemp()).resolve()
         #         with ZipFile(zfile) as zf:
         #             zf.extractall(extract_dir)
         #         newpaths = []
@@ -1512,19 +1556,20 @@ if __name__ == "__main__":
     web_screenshot_mgr.mkdir()
     w = DajiabaoWeb(web_screenshot_mgr)
     w.open()
-    w.login()
+    # w.login(organization='05--浙江分公司')
+    w.login(organization='03--上海分公司')
 
-    data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11','起保日期':'2021-04-24',
+    data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11',
              'files': [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'}, {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},],
              'plan':{'车损':'1000',
                      '三者':'50',
                      '司机':'5000',
                      '乘客':'5000',
                      '道路救援':'5',
-                     '代为驾驶':'2',
+                     '代为驾驶':'1',
                      '折扣系数':'1.35'}
              }
-    w.goto_category_page()
+    w.goto_category_page(category='车险投保')
     w.fill_header_info(data)
     w.fill_car_owner_info(data)
     w.fill_car_info(data)

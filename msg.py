@@ -6,7 +6,7 @@ NEW_TASK = '收到录单任务，手机：{mobile}。任务处理中，请稍候
 # qrcode = '报价单{quotation_id}的{name}客户的付款二维码。'
 qrcode = '{name}客户的订单信息和付款二维码，请确认信息并及时付款。'
 WAIT_APPROVAL = '{name}客户的报价单已提交，单号是{quotation_id}，等待审核中。'
-INSURANCE_TICKET = '报价单{quotation_id}的{name}客户的电子保单。'
+INSURANCE_TICKET = '{name}客户的保单{quotation_id}的电子保单。'
 CUSTOMER_PAY_MSG = '尊敬的{name}，请您确认以上保险方案。确认后请于30分钟内二维码支付。如需修改可联系业务人员。'
 CUSTOMER_INSURANCE_MSG = '尊敬的{name}，这是您的电子保单。如由问题可联系业务人员。'
 

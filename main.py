@@ -2,6 +2,7 @@
 
 # import json
 import logging
+import psutil
 # import queue
 # import requests
 import sys
@@ -49,9 +50,7 @@ class Spinner:
         time.sleep(self.delay)
         if exception is not None:
             return False
-
-
-def main():
+def init_log():
     log_dir = Path('log')
     if not log_dir.exists():
         log_dir.mkdir()
@@ -59,8 +58,16 @@ def main():
         logging.StreamHandler(),
         logging.FileHandler(filename='./log/rpa.log', encoding='utf8')
     ])
-    logger.info('Kill existing WetChat process.')
-    prun(['taskkill', '/f', '/t', '/im', 'WeChat.exe'])
+
+def get_pid(pname):
+    for proc in psutil.process_iter():
+        #print(“pid-%d,name:%s” % (proc.pid,proc.name()))
+        if proc.name() == pname:
+            return proc.pid
+
+def main():
+    init_log()
+
     username = input('请输入保单系统登录用户名[使用默认值请直接回车]：')
     if not username:
         username = '1231130012'
@@ -68,24 +75,29 @@ def main():
     if not password:
         password='tesla2020'
 
-    wechat = WeChat()
-    wechat.start()
-    wechat.win_login.wait('ready', 5)
-    print('请登录微信...')
-    with Spinner():
-        while wechat.win_login.exists():
-            time.sleep(2)
+    pid = get_pid('WeChat.exe')
+    if pid:
+        logger.info(f'existing WetChat process:{pid}')
+        wechat = WeChat(process=pid)
+    else:
+        logger.info('Kill existing WetChat process.')
+        prun(['taskkill', '/f', '/t', '/im', 'WeChat.exe'])
+        wechat = WeChat()
+        wechat.win_login.wait('ready', 5)
+        print('请登录微信...')
+        with Spinner():
+            while wechat.win_login.exists():
+                time.sleep(2)
     wechat.win_main.wait('ready', 5)
-    wechat.win_main.maximize()
+    # wechat.win_main.maximize()
     try:
         rpa = BaoxianWeChatRpa(wechat=wechat, username=username, password=password)
         rpa.loop()
     except:
         logger.exception('Exception in main func entry.')
 
-    logger.info('Kill WetChat process.')
-    prun(['taskkill', '/f', '/t', '/im', 'WeChat.exe'])
-    # input('按任意键退出...')
+    # logger.info('Kill WetChat process.')
+    # prun(['taskkill', '/f', '/t', '/im', 'WeChat.exe'])
 
 
 if __name__ == "__main__":

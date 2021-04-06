@@ -211,6 +211,7 @@ class BaoxianWeChatRpa:
 
     def parse_order_msg(self, msg) -> dict:
         logger.info('parse msg: %s', msg)
+        msg = msg.replace(' ', '')
         msg = msg.replace('（', '(').replace('）', ')').replace('：', ':')
         msg = msg.replace(',', ' ').replace('，', ' ').replace('、', ' ')
         result = {}
@@ -283,14 +284,10 @@ class BaoxianWeChatRpa:
                 custom_options[prefix+option_name] = v
             result['plan_custom'] = custom_options
 
-        has_date = False
         matches = re.search(r'(生效)(日期)?:\s*(\d+-\d+-\d+)', msg)
         if matches:
             # result['生效'] = result['start_date'] = matches.group(3) + ' 00:00'
             result['生效'] = result['start_date'] = matches.group(3)
-            has_date = True
-        if not has_date:
-            return {'error': errors.E_MSG, 'msg': strings.ERR_NO_DATE}
 
         matches = re.search(r'证件有效期:\s*(\d+-\d+-\d+)', msg)
         if matches:
@@ -490,7 +487,7 @@ class BaoxianWeChatRpa:
         pending_sender_tasks = {}  # 还未完成信息收集的任务，格式：{sender: task}。
         for msgctrl in reversed(msg_items):
             if (not has_new_cmd) and (not pending_sender_tasks):
-                logger.info('stop scanning message in chat %s', chat_name)
+                # logger.info('stop scanning message in chat %s', chat_name)
                 break
 
             msg = msgctrl.text
@@ -614,9 +611,10 @@ class BaoxianWeChatRpa:
                     # self.waiting_recog = {uuid：task}
                     # self.recoging_tasks ={task_id：task}
                     # 发送'收到录单任务，手机：{mobile}。任务处理中，请稍候
-                    self._process_new_order_task(task)
+                    # self._process_new_order_task(task)
                     #### 看完全注释掉上面一句
                     self._task_handlers[task['task_type']](task)
+                return tasks
             else:
                 logger.error('Unexpected CHAT_PROCESS_MODE: %d', settings.CHAT_PROCESS_MODE)
 
@@ -628,22 +626,37 @@ class BaoxianWeChatRpa:
 
     def handle_next_chat(self):
         curr_chat_name = self.wechat.current_chat_name
-        self.handle_chat_task(chat_name=curr_chat_name)
+        try:
+            if curr_chat_name in ('文件传输助手', '腾讯新闻', '订阅号', '微信团队'):
+                self.wechat.del_chat(curr_chat_name)
+            else:
+                tasks = self.handle_chat_task(chat_name=curr_chat_name)
+                if tasks:
+                    return curr_chat_name
+        except:
+            self.wechat.del_chat(curr_chat_name)
         for chat_name in self.wechat.next_chat():
-            logger.info('At message in chat: %s', chat_name)
+            # logger.info('At message in chat: %s', chat_name)
             curr_chat_name = chat_name
-            self.handle_chat_task(chat_name)
-        return curr_chat_name
+            tasks = self.handle_chat_task(chat_name)
+            if tasks:
+                return curr_chat_name
 
     def signal_handler(self, sig, frame):
         logger.info('Exiting by ctrl+c.')
         self.__flag_quit = True
 
     def _get_waiting_execute_task(self):
+        logger.info(f"_get_waiting_execute_task has tasks:{self.waiting_execute_tasks.keys()}")
+        logger.info(f"_get_waiting_execute_task has tasks:{self.waiting_execute_tasks}")
         done_tasks = []
-        for task_id,task in self.waiting_execute_tasks:
-            del self.waiting_execute_tasks[task_id]
+        has_done_task = []
+        for task_id,task in self.waiting_execute_tasks.items():
+            has_done_task.append(task_id)
+            # del self.waiting_execute_tasks[task_id]
             done_tasks.append(task)
+        for task_id in has_done_task:
+            del self.waiting_execute_tasks[task_id]
         return done_tasks
 
     def download_insurance_ticket(self):
@@ -679,14 +692,14 @@ class BaoxianWeChatRpa:
                     task_hash=task['task_hash'],
                     msg=msg,
                     file_paths=pdfs)
-                if '订单号' in task:
-                    title = get_title(task)
-                    msg = strings.CUSTOMER_INSURANCE_MSG.format(name=name+title)
-                    self._send_insurance_and_video(
-                        order_id=task['订单号'],
-                        msg=msg,
-                        files=pdfs
-                    )
+                # if '订单号' in task:
+                #     title = get_title(task)
+                #     msg = strings.CUSTOMER_INSURANCE_MSG.format(name=name+title)
+                #     self._send_insurance_and_video(
+                #         order_id=task['订单号'],
+                #         msg=msg,
+                #         files=pdfs
+                #     )
 
     def set_download_insurance_flag(self):
         self.flag_download_insurance = True
@@ -719,11 +732,12 @@ class BaoxianWeChatRpa:
         """
         self.wechat.win_main.minimize()
         result = self._baoxianweb.apply_insurance_ticket(task) # quotation_id,qrcode,quotation_preview
+        print(f'_apply_new_insurance result:{result}')
         self.wechat.win_main.maximize()
         if 'error' in result:
             file_paths = (
                 result['screenshot'],) if 'screenshot' in result else None
-            self.send_chat_group_msg(
+            self.send_chat_msg(
                 chat_name=task['chat'],
                 recipient=task['sender'],
                 task_hash=task['task_hash'],
@@ -733,9 +747,9 @@ class BaoxianWeChatRpa:
         else:
             new_task = result['content']
             quotation_id = new_task['quotation_id']
-            name = new_task['姓名']
+            name = new_task['车主姓名']
             if 'quotation_preview' in new_task:
-                msg = '这是报价单号{}的预览。'.format(quotation_id)
+                msg = '这是保险单{}的预览。'.format(quotation_id)
                 self.send_chat_msg(
                     chat_name=task['chat'],
                     recipient=task['sender'],
@@ -753,18 +767,18 @@ class BaoxianWeChatRpa:
                     task_hash=task['task_hash'],
                     msg=msg,
                     file_paths=(qrcode,))
-                if '订单号' in task:
-                    title = get_title(task)
-                    msg = strings.CUSTOMER_PAY_MSG.format(
-                        name=name+title)
-                    self.send_to_order_chat(
-                        order_id=task['订单号'],
-                        msg=msg,
-                        files=[
-                            new_task['quotation_preview'],
-                            qrcode,
-                        ]
-                    )
+                # if '订单号' in task:
+                #     title = get_title(task)
+                #     msg = strings.CUSTOMER_PAY_MSG.format(
+                #         name=name+title)
+                #     self.send_to_order_chat(
+                #         order_id=task['订单号'],
+                #         msg=msg,
+                #         files=[
+                #             new_task['quotation_preview'],
+                #             qrcode,
+                #         ]
+                #     )
                 self.waiting_downloads[quotation_id] = new_task
 
 
@@ -790,15 +804,16 @@ class BaoxianWeChatRpa:
                 # 关闭搜索聊天记录界面
                 self.wechat.handle_msg_search_wnd()
 
-                # if self.flag_download_insurance:
-                #     self.download_insurance_ticket()
-                #     self.flag_download_insurance = False
-                #     timer = threading.Timer(
-                #         self.DOWNLOAD_CHECK_INTERVAL, self.set_download_insurance_flag)
-                #     timer.daemon = True
-                #     timer.start()
+                if self.flag_download_insurance:
+                    self.download_insurance_ticket()
+                    self.flag_download_insurance = False
+                    timer = threading.Timer(
+                        self.DOWNLOAD_CHECK_INTERVAL, self.set_download_insurance_flag)
+                    timer.daemon = True
+                    timer.start()
 
                 tasks = self._get_waiting_execute_task()
+                logging.info(f'_get_waiting_execute_task has tasks:{tasks}')
                 for task in tasks:
                     if 'error' in task:
                         self.send_chat_msg(
@@ -809,6 +824,7 @@ class BaoxianWeChatRpa:
                         continue
                     logger.info('Task for new insurance: %s', task)
                     self._apply_new_insurance(task)
+                print('loop826', self.waiting_downloads)
                 self.handle_next_chat()
                 time.sleep(1)
                 # 移动鼠标防止锁屏
