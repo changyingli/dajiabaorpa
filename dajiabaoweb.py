@@ -261,12 +261,12 @@ class DajiabaoWeb:
         """
         # organization_code = data['organization_code']
         # agent_code = data['agent_code']
-        # # 浙江
-        # organization_code = '05700205'
-        # agent_code = '105002267'
-        # 上海
-        organization_code = '03000063'
-        agent_code = '103005701'
+        # 浙江
+        organization_code = '05700205'
+        agent_code = '105002267'
+        # # 上海
+        # organization_code = '03000063'
+        # agent_code = '103005701'
         # 点击承保机构
         elem = self.driver.find_element_by_xpath("//span[../div/descendant::input[@id='insuranceChannelInfoUnderwritingAgency']]")
         self.driver.execute_script("arguments[0].click()", elem)
@@ -569,7 +569,6 @@ class DajiabaoWeb:
         self.handle_warning_dlg(timeout=5)
         self.handle_err_dlg(timeout=1)
 
-
         # # 直接点击 查询
         # search_elem = self.driverwait.until_find_element(By.ID,"motorcycleTypeDialogSearch")
         # search_elem.click()
@@ -590,8 +589,6 @@ class DajiabaoWeb:
         #     # elem.clear() # 这个不行会报错
         #     input_elem.send_keys(model)
         #     search_elem.click()
-
-        #
 
         # 去除车型中的汉字
         model = data['厂牌型号']
@@ -1022,6 +1019,7 @@ class DajiabaoWeb:
                 logger.info('成功提示窗口： %s', success_text)
                 success_msg_list.append(success_text)
                 success_dlg.close()
+                time.sleep(2) # 计算成功 后还有个 暂存成功
                 # 得到两个消息后就是成功了
                 prompt = '\n'.join(success_msg_list)
                 if ('暂存成功' and '计算成功') in prompt:
@@ -1336,9 +1334,10 @@ class DajiabaoWeb:
 
         return commerce_num,pay_content_path,qutation_path
 
-    def query_quotation_status(self, quotation_id) -> list:
-        # self.driver.find_element(
-        #     By.XPATH, './/img[@data="quotation_search"]').click()
+    def ckeck_quotation_status(self, quotation_id):
+        """查看是否已经付款生成电子保单，生成则返回保单号
+        """
+
         self.driver.get('https://xkscd.djbx.com:9080/pc_vir/underwriting/renwPreminm')
         time.sleep(1)
         WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((By.XPATH, '//label[text()="保单号："]/../descendant::input'))).click()
@@ -1348,28 +1347,16 @@ class DajiabaoWeb:
 
 
         # head_tr1和head_tr2 网页看上去是一样的，但是head_tr2只能获取到th.text='操作'，head_tr1中可以获取到其他的表头，莫名其妙？？？？
-        head_tr1 = self.driverwait.until_find_element(By.XPATH,
-                                                      "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__header-wrapper']]")
-        head_th_list1 = head_tr1.find_elements_by_tag_name('th')
-        for th in head_th_list1:
-            print(th.text)
-            if '上市年月' in th.text:
-                time_index = head_th_list1.index(th)
-            elif '新车购置价' in th.text:
-                price_index = head_th_list1.index(th)
-        head_tr2 = self.driverwait.until_find_element(By.XPATH,
-                                                      "//tr[contains(string(),'新车购置价')][ancestor::div[@class='el-table__fixed-right']]")
-        head_th_list = head_tr2.find_elements_by_tag_name('th')
+        # head_tr1 = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'保单号')][ancestor::div[@class='el-table__header-wrapper']]") # 结果的表头
+        # head_th_list1 = head_tr1.find_elements_by_tag_name('th')
+        # head_tr2 = self.driverwait.until_find_element(By.XPATH, "//tr[contains(string(),'保单号')][ancestor::div[@class='el-table__fixed-right']]")
+        # head_th_list = head_tr2.find_elements_by_tag_name('th')
 
-        trlist = self.driver.find_elements(
-            By.CSS_SELECTOR, '#resultTable > tbody > tr')
+        trlist = self.driver.find_element(By.XPATH, "//tr[contains(string(),'保单号')][ancestor::div[@class='el-table__header-wrapper']]")
         if not trlist:
-            raise errors.RpaError(error=errors.E_PROC,
-                                  message='没有查到报价单号：{}'.format(quotation_id))
-        status = [json.loads(tr.get_attribute('data')) for tr in trlist]
-        return status
-
-
+            return
+            # raise errors.RpaError(error=errors.E_PROC, message='没有查到保单号：{} 的电子保单'.format(quotation_id))
+        return quotation_id
 
     def handle_success_dlg(self, timeout=2):
         dlg_success = dialog.SuccessMsgDlg(self.driver)
@@ -1474,7 +1461,7 @@ class DajiabaoWeb:
 
     @entry_wrap
     def get_insurance_files(self, quotation_ids: list) -> dict:
-        """TODO 保单下载 未修改
+        """TODO 保单下载 未完成
         """
         logger.info('start getting insurance pdf files for %s', quotation_ids)
         dl_dir = tempfile.mkdtemp()
@@ -1486,35 +1473,48 @@ class DajiabaoWeb:
         effect_tickets = {}
         cnt_dl = 0
         for quotation_id in quotation_ids:
-            tickets = self.query_quotation_status(quotation_id)
-            effect = False
+            tickets = self.ckeck_quotation_status(quotation_id)
             if tickets:
-                state = tickets[0]['quotationState']
-                logger.info('quotation: %s state: %s', quotation_id, state)
-                if state == '生效':
-                    effect = True
-
-            if not effect:
-                continue
+                logger.info('quotation: %s has  been generated', quotation_id)
             else:
-                cbs = self.driver.find_elements(
-                    By.XPATH, "//table[@id='resultTable']//input[@name='quotationCheckBox']")
-                for cb in cbs:
-                    cb.click()
-                self.driver.find_element(By.CSS_SELECTOR, '#dzbdxz').click()
-                time.sleep(2)
-                cnt_dl += 1
-                effect_tickets.update({t['policyNo']: t for t in tickets})
-        now = time.time()
-        download_timeout = now + self.DOWNLOAD_WAIT_TIME
-        done_zips = set()
-        quot_pdfs = {}
-        while now < download_timeout:
-            zipfiles = [p for p in Path(dl_dir).glob(
-                '*.zip') if p not in done_zips]
-            logger.info('zip files: %s', zipfiles)
-            for zfile in zipfiles:
-                extract_dir = Path(tempfile.mkdtemp()).resolve()
+                logger.info('quotation: %s has not been generated yet', quotation_id)
+                continue
+
+            # head_tr1和head_tr2 网页看上去是一样的，但是head_tr2只能获取到th.text='操作'，head_tr1中可以获取到其他的表头，莫名其妙？？？？
+            trlist1 = self.driver.find_element(By.XPATH, f"//tr[contains(string(),'{quotation_id}')][ancestor::div[@class='el-table__body-wrapper is-scrolling-none']]")
+            trlist2 = self.driver.find_element(By.XPATH, f"//tr[contains(string(),'{quotation_id}')][ancestor::div[@class='el-table__fixed-body-wrapper']]")
+
+            # 勾选
+            elem = trlist2.find_element(By.XPATH, './td[1]/div')
+            elem.click()
+            # ...
+            elem =trlist2.find_element(By.XPATH,'./td[13]//div[@class="underwritingStyle"]')
+            elem.click()
+            # 电子保单
+            elem = self.driverwait.until_find_element(By.XPATH, '//body/div[@class="el-select-dropdown el-popper"]//span[text()="电子保单"]')
+            elem.click()
+            # 下载电子保单
+            elem = self.driverwait.until_find_element(By.XPATH, '//div[@class="electricPolicyBtnBox"]/div[contains(string(),"下载电子保单")]')
+            elem.click()
+            time.sleep(2)
+            # 关闭弹出界面
+            self.driver.find_element(By.XPATH, '//div[@class="el-dialog__wrapper electricPolicyBox"]//button[@class="el-dialog__headerbtn"]').click()
+            # TODO 暂时做到这里，后续待开发
+
+        #     self.driver.find_element(By.CSS_SELECTOR, '#dzbdxz').click()
+        #     time.sleep(2)
+        #     cnt_dl += 1
+        #     effect_tickets.update({t['policyNo']: t for t in tickets})
+        # now = time.time()
+        # download_timeout = now + self.DOWNLOAD_WAIT_TIME
+        # done_zips = set()
+        # quot_pdfs = {}
+        # while now < download_timeout:
+        #     zipfiles = [p for p in Path(dl_dir).glob(
+        #         '*.zip') if p not in done_zips]
+        #     logger.info('zip files: %s', zipfiles)
+        #     for zfile in zipfiles:
+        #         extract_dir = Path(tempfile.mkdtemp()).resolve()
         #         with ZipFile(zfile) as zf:
         #             zf.extractall(extract_dir)
         #         newpaths = []
@@ -1556,8 +1556,8 @@ if __name__ == "__main__":
     web_screenshot_mgr.mkdir()
     w = DajiabaoWeb(web_screenshot_mgr)
     w.open()
-    # w.login(organization='05--浙江分公司')
-    w.login(organization='03--上海分公司')
+    w.login(organization='05--浙江分公司')
+    # w.login(organization='03--上海分公司')
 
     data = { '邮箱':'131545@qq.com', '手机':'15518899777','证件有效期':'2021-11-11',
              'files': [{'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\身份证.jpg'}, {'type': 'pic', 'path': 'C:\\Users\\13154\\Desktop\\各个项目\\大家保\\行驶证.jpg'},],
